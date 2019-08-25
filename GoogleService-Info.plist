@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>38082047281-icr61e546ifpor8omo01hm616342dvv1.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.38082047281-icr61e546ifpor8omo01hm616342dvv1</string>
+	<key>API_KEY</key>
+	<string>AIzaSyDSwvkFHv1anoPmXCdtR973sZfgyq2suWs</string>
+	<key>GCM_SENDER_ID</key>
+	<string>38082047281</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>gq.foodtech.singleapp</string>
+	<key>PROJECT_ID</key>
+	<string>merchantownapp</string>
+	<key>STORAGE_BUCKET</key>
+	<string>merchantownapp.appspot.com</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:38082047281:ios:e50a6a7f3a6cf5a5</string>
+	<key>DATABASE_URL</key>
+	<string>https://merchantownapp.firebaseio.com</string>
+</dict>
+</plist>

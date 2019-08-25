@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "38082047281",
+    "firebase_url": "https://merchantownapp.firebaseio.com",
+    "project_id": "merchantownapp",
+    "storage_bucket": "merchantownapp.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:38082047281:android:e50a6a7f3a6cf5a5",
+        "android_client_info": {
+          "package_name": "gq.foodtech.singleapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "38082047281-d1mhq5sr4hi4m8vgk7l7ab4kseplm93c.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAyY8QarsTm6lqhjtRSpAfoS1sW4P0V--0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "38082047281-d1mhq5sr4hi4m8vgk7l7ab4kseplm93c.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "38082047281-icr61e546ifpor8omo01hm616342dvv1.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "gq.foodtech.singleapp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
