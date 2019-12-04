@@ -1,6 +1,6 @@
 var krms_config ={			
-	'ApiUrl':"http://foodtech.eservices.gq/merchantapp/api",			
+	'ApiUrl':"https://eateries.online/singlemerchant/api",			
 	'DialogDefaultTitle':"KMRS",			
-	'MerchantKeys':"0c0911475809b8786a76a80c0f139194",
+	'MerchantKeys':"306f0ec73b7e428dbb8e0174971f49e9",
 	'debug': false
 };

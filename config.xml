@@ -2,15 +2,15 @@
 <widget xmlns = "http://www.w3.org/ns/widgets"
     xmlns:gap = "http://phonegap.com/ns/1.0"
     xmlns:android = "http://schemas.android.com/apk/res/android"
-    id        = "gq.foodtech.singleapp"
+    id        = "thedot.eateries.coffee"
     android-versionCode = "20"
     version   = "2.0">
-    <name>ABC-restaurant app</name>
+    <name>The Dot Coffee App</name>
     <description>
-        Single restaurant app
+        Order taking and table reservation App
     </description>
-    <author email="support@premium.bh" href="http://premium.bh">
-        foodtech.eservices.gq
+    <author email="thedotcoffee@gmail.com" href="https://thedotcoffee.com">
+        thedotcoffee.com
     </author>
             
     <content src="index.html" />

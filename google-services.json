@@ -1,42 +1,35 @@
 {
   "project_info": {
-    "project_number": "38082047281",
-    "firebase_url": "https://merchantownapp.firebaseio.com",
-    "project_id": "merchantownapp",
-    "storage_bucket": "merchantownapp.appspot.com"
+    "project_number": "1043781162812",
+    "firebase_url": "https://thedotcoffee.firebaseio.com",
+    "project_id": "thedotcoffee",
+    "storage_bucket": "thedotcoffee.appspot.com"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:38082047281:android:e50a6a7f3a6cf5a5",
+        "mobilesdk_app_id": "1:1043781162812:android:12fab199f578a9e3677039",
         "android_client_info": {
-          "package_name": "gq.foodtech.singleapp"
+          "package_name": "thedot.eateries.coffee"
         }
       },
       "oauth_client": [
         {
-          "client_id": "38082047281-d1mhq5sr4hi4m8vgk7l7ab4kseplm93c.apps.googleusercontent.com",
+          "client_id": "1043781162812-r8bmtshiu8jc9vsosha3b5o5ophmb4ik.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyAyY8QarsTm6lqhjtRSpAfoS1sW4P0V--0"
+          "current_key": "AIzaSyAsZcyBWfo6mLB-gg4r_9c1n2_zwNtEV4E"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "38082047281-d1mhq5sr4hi4m8vgk7l7ab4kseplm93c.apps.googleusercontent.com",
+              "client_id": "1043781162812-r8bmtshiu8jc9vsosha3b5o5ophmb4ik.apps.googleusercontent.com",
               "client_type": 3
-            },
-            {
-              "client_id": "38082047281-icr61e546ifpor8omo01hm616342dvv1.apps.googleusercontent.com",
-              "client_type": 2,
-              "ios_info": {
-                "bundle_id": "gq.foodtech.singleapp"
-              }
             }
           ]
         }
