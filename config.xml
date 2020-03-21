@@ -59,7 +59,7 @@
 	<!--
     <gap:plugin name="cordova-plugin-facebook4" source="npm"  spec="5.0.0" >
 	  <variable name="APP_ID" value="" />
-	  <variable name="APP_NAME" value="Karenderia" />
+	  <variable name="APP_NAME" value="The Dot Coffee" />
 	</gap:plugin>	
 	-->
 		
@@ -127,10 +127,10 @@
 	    
 		<platform name="ios">    
 		    <config-file platform="ios" target="*-Info.plist" parent="NSLocationAlwaysUsageDescription">
-		        <string>This allows us to use your location to provide you a nearby restaurant, and to facilitate more accurately, keeping you in the loop about Karenderia.</string>
+		        <string>This allows us to use your location to provide you a nearby restaurant, and to facilitate more accurately, keeping you in the loop about The Dot Coffeeshop.</string>
 		    </config-file>
 		    <config-file platform="ios" target="*-Info.plist" parent="NSLocationWhenInUseUsageDescription">
-		        <string>This allows us to use your location to provide you a nearby restaurant, and to facilitate more accurately, keeping you in the loop about Karenderia.</string>
+		        <string>This allows us to use your location to provide you a nearby restaurant, and to facilitate more accurately, keeping you in the loop about The Dot Coffeeshop.</string>
 		    </config-file>
 		</platform>   
 		
@@ -147,7 +147,7 @@
 		</edit-config>
 		
 		<edit-config target="NSLocationAlwaysAndWhenInUseUsageDescription" file="*-Info.plist" mode="merge">
-		    <string>This allows us to use your location to provide you a nearby restaurant, and to facilitate more accurately, keeping you in the loop about Karenderia.</string>
+		    <string>This allows us to use your location to provide you a nearby restaurant, and to facilitate more accurately, keeping you in the loop about The Dot Coffeeshop.</string>
 		</edit-config>
 		
 		<edit-config target="NSLocationAlwaysUsageDescription" file="*-Info.plist" mode="merge">
