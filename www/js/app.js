@@ -22,17 +22,28 @@ var exit_cout = 0;
 
 var device_id  = 'XXX_1234567890_1230187';
 var device_platform = 'android';
+var device_uiid ='uid_123';
 
 var push_handle;
-var map;
+/*var map;
 var marker;
-var map_bounds = [];
+var map_bounds = [];*/
 
 var translator;
 var dict = {};
 
 var icon_loader = '<ons-progress-circular indeterminate></ons-progress-circular>';
 var trackmap_interval;
+
+var infinite_page = 0;
+var ajax_timeout = 30000;
+var interval_timeout = 60000;
+var track_interval;
+
+var code_version = 1.2;
+var tabbar_loaded = false;
+var startup_banner_interval;
+var home_banner_interval;
 
 jQuery.fn.exists = function(){return this.length>0;}
 
@@ -56,58 +67,15 @@ function onDeviceReady() {
 	try {
 		
 		navigator.splashscreen.hide();
+						
+		if(device.platform=="android" || device.platform=="Android" ){
+		   StatusBar.backgroundColorByHexString("#ef6625");
+		}
 				
-	    device_platform = device.platform;		
-	    	    
-	   
-		push_handle = PushNotification.init({
-			android: {
-				sound : "true",
-				clearBadge : "true"
-			},
-		    browser: {
-		        pushServiceURL: 'http://push.api.phonegap.com/v1/push'
-		    },
-			ios: {
-				alert: "true",
-				badge: "true",
-				sound: "true",
-				clearBadge:"true"
-			},
-			windows: {}
-		});
-		
-		push_handle.on('registration', function(data) {   	   	   	   	  
-	   	   device_id  = data.registrationId;	   	   
-	    });
-		
-	    push_handle.on('notification', function(data){
-	    	//alert(JSON.stringify(data)); 
-	    		    	
-	    	if ( data.additionalData.foreground ){
-	    		playSound();
-	    	}
-	    	
-	    	handleNotification(data);
-	    	
-	    });
-	    	    
-	     PushNotification.createChannel(function(){
-	    	 //alert('create channel succces');
-	     }, function(){
-	    	//alert('create channel failed');
-	     },{
-	    	 id: 'kmrs_singleapp',
-	         description: 'singleapp app channel',
-	         importance: 5,
-	         vibration: true,
-	         sound : 'beep'
-	      }
-	     );
-	    
-	    push_handle.on('error', function(e) {     
-	    	alert(e.message);
-	    });	    	   
+		device_uiid = device.uuid;
+	    device_platform = device.platform;	    	 
+
+	    handlePushRegister();  	 
     
     } catch(err) {
        alert(err.message);
@@ -131,44 +99,89 @@ ons.platform.select('android');
 
 ons.ready(function() {
 	   		
+	
+	if (ons.platform.isIPhoneX()) {		
+	    document.documentElement.setAttribute('onsflag-iphonex-portrait', '');
+	    $('head').append('<link rel="stylesheet" href="css/app_ios.css?ver=1.0" type="text/css" />'); 	     
+	}
+	
+	// fix to autocomplete search address bar
+	$(document).on({
+	"DOMNodeInserted": function(e){
+	console.log(e);
+	$(".pac-item span",this).addClass("needsclick");
+	}
+	}, ".pac-container");
+	
 	//dialogNoNet();
 	//dialogInvalidKey();
 	//removeStorage("token");
 	
-	//localStorage.clear();
+	/*RESET DATA*/
+	
+	//localStorage.clear();	
+	//removeStorage("lang");
+	removeStorage("next_step");
+	removeStorage("singleapp_merchant_category");
 	removeStorage("delivery_time_set");
 	removeStorage("delivery_date_set");
 	removeStorage("delivery_date_set_pretty");
 	removeStorage("push_unregister");
 	removeStorage("dialog_error_title");
 	removeStorage("dialog_error_msg");
+	removeStorage("is_asap");
 	//removeStorage("customer_number");
 	
-	if (ons.platform.isIPhoneX()) { 
+	tabbar_loaded = false;
+	
+	/*if (ons.platform.isIPhoneX()) { 
 	   document.documentElement.setAttribute('onsflag-iphonex-portrait', '');
-	}
+	}*/
 	
 	onsenNavigator = document.getElementById('onsenNavigator');
 	dump('onsen ready');	 
 		
-	ons.setDefaultDeviceBackButtonListener(function(event) {		
-		//dump(onsenNavigator.topPage);		 
-		exit_cout++;
-		if(exit_cout<=1){		
-			showToast("Press once again to exit!");	
-			 setTimeout(function(){ 
-			 	 exit_cout=0;
-			 }, 3000);
-		} else {
-			if (navigator.app) {
-			   navigator.app.exitApp();
-			} else if (navigator.device) {
-			   navigator.device.exitApp();
+	ons.setDefaultDeviceBackButtonListener(function(event) {			
+		current_page_id = onsenNavigator.topPage.id;
+	    //alert("current_page_id=>"+current_page_id);	
+	    app_close = false;	    			
+	    switch(current_page_id){
+	    	case "page_settings":
+	    	case "page_startup":
+	    	case "startup_banner":
+	    	  app_close=true;
+	    	break;
+	    	
+	    	case "page_home":
+  	    	  active_index = document.querySelector('ons-tabbar').getActiveTabIndex();
+  	    	  //alert(active_index);
+  	    	  if(active_index>0){
+  	    	  	  document.querySelector('ons-tabbar').setActiveTab(0);
+  	    	  } else if ( active_index<=0 ){
+  	    	  	 app_close=true; 
+  	    	  }
+	    	break;
+	    }
+	    
+	    if(app_close){
+	    	exit_cout++;
+			if(exit_cout<=1){		
+				showToast( t("Press once again to exit!") );	
+				 setTimeout(function(){ 
+				 	 exit_cout=0;
+				 }, 3000);
 			} else {
-			   window.close();
-			}
-		}
-	});
+				if (navigator.app) {
+				   navigator.app.exitApp();
+				} else if (navigator.device) {
+				   navigator.device.exitApp();
+				} else {
+				   window.close();
+				}
+			}	
+	    }
+	    
+	});/* end back listner*/
 	
 });
 
@@ -194,59 +207,72 @@ document.addEventListener('init', function(event) {
    dump('init page');
    var page = event.target;
    var page_id = event.target.id;   
-   dump(page_id);      
+   dump("page_id =>"+ page_id);      
    
    translatePage();
    
    switch (page_id)
    {
-   	
+   	   	  
    	  case "map_select":   	     	    
    	    checkLocation(2);
    	  break;
    	  
    	  case "forgot_pass":
-   	    placeholder(".user_email",'Mobile number or email');
+   	    placeholder(".user_email",'Enter your email or username');
+   	    setFocus('user_email'); 
    	  break;
    	
    	  case "notification":   	    
-   	     $(".clear_notification").hide();
-         paginate_count=1;
-		 paginate_result=0;
-   	     ajaxCall('loadNotification','');
+   	     infinite_page=0;   	     	    
+   	     processDynamicAjax("GetNotification", "" , "notification_loader",  '' , 1);
+   	     initPullHook("GetNotification", "notification_pull", "notification_loader");
+   	     initInfiniteScroll(page,"GetNotification",'#notification .notification_infinite','');	     
    	  break;
    	
    	  case "page_settings":
-   	    getAppSettings();   
+   	    $(".app_title").html(krms_config.DialogDefaultTitle);
+   	    getAppSettings();      	    
    	    break;
    	    
-   	  case "page_home":   	        	     
-   	      /*var tab='';
-   	      tab+='<ons-tabbar id="tabbar_bottom"  position="bottom">';
-		    tab+='<ons-tab page="splitter.html" label="'+ translator.get("Food") +'" icon="md-local-dining" ></ons-tab>';
-		    tab+='<ons-tab page="reviews.html" label="'+ translator.get("Reviews") +'" icon="md-star" ></ons-tab> ';
-		    tab+='<ons-tab page="orders.html" label="'+ translator.get("Orders") +'" icon="md-reorder" ></ons-tab>';
-		    tab+='<ons-tab page="profile_menu.html" label="'+ translator.get("You") +'" icon="fa-user" ></ons-tab>';
-		    tab+='<ons-tab label="'+ translator.get("Cart") +'" icon="md-shopping-cart" onclick="showCart()" class="tabb_cart" badge="" ></ons-tab>';
-		  tab+='</ons-tabbar>';		  
-		 $(".home_tabbar").html(tab); */
+   	  case "page_home":   	   
+   	     runStartUpBanner(true);
+   	     $(".home_tabbar").html( tabbarMenu() );     	        	      
    	     break;
    	     
-   	  case "page_category":    	    
+   	  case "page_category":    	   
+   	    $(".app_title").html(krms_config.DialogDefaultTitle); 
    	    removeStorage('infinite_category');   	    
    	    ajaxCall('loadCategory','');   	    
    	    FillBanner();
-   	    getProfileSilent();
+   	    initImageLoaded();   	    
+   	    
+   	    getProfileSilent();   	       	       	      	       	    
+   	    floatingCategory(true);
+
+		initPullHook('loadCategory', 'pull_category','category_loader','');   	
+		
+		tabbar_loaded = true;
+		
    	  break;
    	  
    	  case "page_item":
-   	    paginate_count=0;
-   	    page.querySelector('ons-toolbar .center').innerHTML = page.data.cat_name;
+   	  
+   	    placeholder(".search_for_item",'Search for item');   	    
+   	  
+   	    paginate_count=0;   	    
+   	    $("#page_item .page_title").html( page.data.cat_name );
    	    
    	    $(".search-input ").removeClass("search-input--material");  
+   	    $("#page_item .cat_id").val(page.data.cat_id);
+   	    
+   	    carThemeSettings();
+   	    floatingCategory(false);
    	    
    	    ajaxCall('loadItemByCategory',"cat_id="+ page.data.cat_id);
+   	    initPullHook('loadItemByCategory', 'pull_item','loader_item', "cat_id="+ page.data.cat_id );   
    	    getCartCount();
+   	       	    
    	  break;
    	  
    	  case "page_item_details":
@@ -255,15 +281,16 @@ document.addEventListener('init', function(event) {
    	    } else {
    	    	params = "item_id="+ page.data.item_id + "&cat_id=" + page.data.cat_id;
    	    }
+   	    $(".item_id").val(page.data.item_id);
    	    ajaxCall('loadItemDetails', params );   	    
+   	    initPullHook('loadItemDetails', 'page_item_details_pull','page_item_details_loader', params);   
    	  break;
    	  
    	  case "page_cart":
-   	   $(".min_delivery_order").val('');
-   	   /*if(!empty(page.data.min_delivery_order)){   	         	   	  
-   	      $(".min_delivery_order").val( page.data.min_delivery_order );
-   	   }*/
-   	   loadCart();
+   	   $(".min_delivery_order").val('');   	   
+   	   loadCart();   	   
+   	   initPullHook('loadCart', 'page_cart_pull','page_cart_loader','');    	     	   
+   	   
    	  break;
    	  
    	  
@@ -277,12 +304,15 @@ document.addEventListener('init', function(event) {
    	  case "dinein_forms":
    	     $(".pay_now_label").html( t("PAY")+ " " + $(".cart_total_value").val() );
    	     
-   	     if(settings = AppSettings()){
-	   	  	 dump(settings);
-	   	  	 if(settings.cod_change_required=="2"){
-	   	  	 	$(".order_change").attr("required",'required');
-	   	  	 }   	  	 
-	   	  }   	  
+   	     if(page_id=="cod_forms"){
+	   	     if(settings = AppSettings()){
+		   	  	 dump(settings);
+		   	  	 if(settings.cod_change_required=="2"){
+		   	  	 	$(".order_change").attr("required",'required');
+		   	  	 	setFocus("order_change");
+		   	  	 }   	  	 
+		   	 }   	  
+   	     }
    	  
 	   	  customer_number = getStorage("customer_number");
 	   	  if(!empty(customer_number)){
@@ -293,8 +323,11 @@ document.addEventListener('init', function(event) {
    	  break;
    	  
    	  case "signup":
-   	  document.getElementById("first_name_field")._input.focus();
    	  
+   	  runStartUpBanner(true);
+   	  
+   	  setFocus('first_name_field'); 
+		
    	  placeholder("#first_name_field",'First name');
    	  placeholder(".last_name",'Last name');
    	  placeholder(".contact_phone",'Mobile number');
@@ -304,9 +337,20 @@ document.addEventListener('init', function(event) {
    	  
    	  if(settings = AppSettings()){
    	  	 dump(settings);
-   	  	 if(settings.terms_customer=="yes"){   	  	 	    	  	 	
+   	  	 /*if(settings.terms_customer=="yes"){   	  	 	    	  	 	
 		    $(".terms_condition_wrap").show();		    
+   	  	 } */
+   	  	 
+   	  	 if(settings.registration.email!=1){
+   	  	 	$(".email_address_field").remove();
+   	  	 }
+   	  	 if(settings.registration.mobile!=1){
+   	  	 	$(".contact_phone_field").remove();
    	  	 }   	  	 
+   	  	 
+   	  	 setCustomeFields('signup_list',settings.registration);
+   	  	    	  	 
+   	  	 
    	  }   	  
    	  
    	  customer_number = getStorage("customer_number");
@@ -336,6 +380,7 @@ document.addEventListener('init', function(event) {
    	  
    	  case "receipt":   	    
    	    $(".order_place_label").html( page.data.message );
+   	    $(".receipt_order_id").val( page.data.order_id );
    	    var page = onsenNavigator.topPage; 
    	    page.onDeviceBackButton = function(event) {   	    	
    	    	backToHome(1);
@@ -343,12 +388,16 @@ document.addEventListener('init', function(event) {
    	  break;
    	  
    	  case "customer_profile":
+   	  
    	    placeholder(".email_address",'Email address');
    	    placeholder(".first_name",'First name');
    	    placeholder(".last_name",'Last name');
-   	    placeholder(".contact_phone",'Mobile no.');
+   	    placeholder(".contact_phone",'Mobile no.');   	 
    	    
-   	    
+   	    if(settings = AppSettings()){   	    	
+   	    	$(".profile_header").css('background-image', 'url('+ "'" + settings.banner.banner1 + "'" +')');
+   	    }
+   	         	    
    	    $(".loading_wrap").hide();
    	    ajaxCall('getUserProfile', '' ); 
    	  break;
@@ -374,67 +423,61 @@ document.addEventListener('init', function(event) {
    	    } else {   	    	
    	    	$(".show_if_login").hide();
    	    }   	     
-   	    
-   	    /*if(settings = AppSettings()){
-   	    	if ( empty(settings.singleapp_terms_url) ){
-   	    		$(".menu_terms_condition").hide();
-   	    	}
-   	    	if ( empty(settings.singleapp_privacy_url) ){
-   	    		$(".menu_privacy_policy").hide();
-   	    	}
-   	    }*/
-   	    
-   	    ajaxCall("getPages",'');
+   	       	  
+   	    //ajaxCall("getPages",'');
    	    	   
    	  break;
    	  
-   	  case "login":
-   	   document.getElementById("username_field")._input.focus();   	   
+   	  case "login":   	      	 
+   	   runStartUpBanner(true);
+   	   setFocus('username_field'); 
    	   placeholder(".username_field",'Mobile number or email');
    	   placeholder(".password_field",'Password');
-   	   
-   	   $(".social_login_wrap").hide(); 
-   	   $(".fb_wrap").hide();
-   	   $(".google_wrap").hide();
-   	   if(settings = AppSettings()){
-		  if(settings.singleapp_enabled_fblogin==1 || settings.singleapp_enabled_google==1 ){
-		  	 $(".social_login_wrap").show();
-		  } 
-		  
-		  if(settings.singleapp_enabled_fblogin==1){
-		  	 $(".fb_wrap").show();
-		  }
-		  if(settings.singleapp_enabled_google==1){		  	
-		  	 $(".google_wrap").show();
-		  }
-	   }
-   	   
+   	   socialLoginButton('login_list');   	     
+   	      	   
+   	   if(!tabbar_loaded){
+   	   	  $("#login ons-bottom-toolbar").remove();
+   	   } 
+   	    	   
    	  break;
    	  
    	  case "enter_phone":   	
    	    old_phone = $(".contact_phone").val();
    	    $(".mobile_number").attr("placeholder", t("Mobile no.") );  
    	    if(settings = AppSettings()){
-   	       if(!empty(settings.mobile_prefix)){
-   	       	  $(".prefix").val( settings.mobile_prefix );
-   	       	  
-   	       	  if(!empty(old_phone)){
-   	       	     res = old_phone.replace( settings.mobile_prefix , "");
-   	       	     $(".mobile_number").val( res );
-   	       	  }
+   	       remove_phone_prefix = settings.remove_phone_prefix;	
+   	       if(remove_phone_prefix==1){
+   	       	  $(".prefix_wrap").remove();
+   	       	  if(!empty(old_phone)){	   	       	     
+	   	       	  $(".mobile_number").val( old_phone );
+	   	      }
+   	       } else {
+	   	       if(!empty(settings.mobile_prefix)){
+	   	       	  $(".prefix").val( settings.mobile_prefix );
+	   	       	  
+	   	       	  if(!empty(old_phone)){
+	   	       	     res = old_phone.replace( settings.mobile_prefix , "");
+	   	       	     $(".mobile_number").val( res );
+	   	       	  }
+	   	       }
    	       }
-		}     	       	    
+		}     	       
+		setFocus('mobile_number'); 	    
    	  break;
 
    	  case "creditcard_list":  	  
    	    removeStorage("next_step");
    	    ajaxCall2('getCreditCards', '' ); 
+   	    initPullHook('getCreditCards', 'pull_creditcard_list','creditcard_list_loader','');   
+   	    
+   	    infinite_page = 0; 
+   	    initInfiniteScroll(page,"getCreditCards",'#creditcard_list .creditcard_infinite','');	     
    	  break;
    	  
    	  case "add_creditcards":   	
-   	  
-   	    placeholder(".card_name",'Card name');
-   	    placeholder(".credit_card_number",'Credit card number');
+   	    setFocus('card_name'); 
+   	    placeholder(".card_name",'Cardholders Name');
+   	    placeholder(".credit_card_number",'Credit Card Number');
    	    placeholder(".billing_address",'Billing address');
    	    placeholder(".cvv",'CVV');
    	      
@@ -451,16 +494,21 @@ document.addEventListener('init', function(event) {
    	  break;
    	  
    	  case "addressbook_list":
-   	     ajaxCall2('getAddressBookList', '');
+   	     ajaxCall2('getAddressBookList', '');   	     
+   	     initPullHook('getAddressBookList', 'pull_addressbook_list','addressbook_list_loader','');   	     
+   	     
+   	     infinite_page = 0; 
+   	     initInfiniteScroll(page,"getAddressBookList",'#addressbook_list .addressbook_infinite','');	     
    	  break;
    	  
    	  case "addressbook":
    	  
+   	    setFocus('street'); 
    	    placeholder(".street",'Street');
    	    placeholder(".city",'City');
    	    placeholder(".state",'State');
    	    placeholder(".zipcode",'Zip Code');
-   	    placeholder(".location_name",'Location name');
+   	    placeholder(".location_name",'Floor/unit/Room #');
    	    
    	    var id = page.data.id;
    	    if(!empty(id)){
@@ -469,12 +517,12 @@ document.addEventListener('init', function(event) {
    	    } else {
    	    	ajaxCall('getCountryList', ''); 
    	    	$(".addressbook_action").html(t("SAVE") );
+   	    	initMapAdress('#map_address', true);
    	    }   	    
    	  break;
    	  
-   	  case "order_details":
-   	    var id = page.data.id;
-   	    ajaxCall('getOrderDetails', 'id='+id ); 
+   	  case "order_details":   	    
+   	    ajaxCall('getOrderDetails', 'id='+ page.data.order_id ); 
    	  break;
    	  
    	  case "edit_review":   	    
@@ -482,8 +530,10 @@ document.addEventListener('init', function(event) {
    	  break;
    	  
    	  case "book":
-   	    document.getElementById("number_guest")._input.focus();
+   	    closePanel();
    	    
+   	    setFocus('number_guest'); 
+		
    	    placeholder(".number_guest",'Number of guest');
    	    placeholder(".date_booking",'Date of booking');
    	    placeholder(".booking_time",'Time');
@@ -504,24 +554,37 @@ document.addEventListener('init', function(event) {
    	  break;
    	  
    	  case "info":
+   	    closePanel();
    	    ajaxCall('getMerchantInfo',''); 
+   	    //processDynamicAjax("getMerchantInfo", '' , 'info_wrap',  '' , 1);
+   	    initPullHook("getMerchantInfo", "info_pull", "info_wrap");   	    
    	  break;
    	  
    	  case "photo":
-   	     ajaxCall('getMerchantPhoto',''); 
+   	     closePanel();   	     
+   	     processDynamicAjax("GetGallery", '' , 'photo_loader', '' , 1);
+   	     initPullHook("GetGallery", "photo_pull", "photo_loader");
    	  break;
    	  
    	  case "promos":
+   	    closePanel();
    	    ajaxCall('loadPromo',''); 
+   	    initPullHook("loadPromo", "promos_pull", "promos_loader");
    	  break;
    	  
    	  case "booking_history":
-   	     paginate_count=1;
-		 paginate_result=0;
-		 ajaxCall('loadBooking', '');
+   	     	     
+   	     fillBookingTabs("booking_tabs",0);
+   	     $(".booking_tab_active").val("all");   	     
+   	     processDynamicAjax("loadBooking", "tab=all" , 'booking_loader',  '' ,1);
+   	     initPullHook('loadBooking', 'booking_pull','booking_loader','');    	   
+   	     
+   	     infinite_page=0;
+   	     initInfiniteScroll(page,"loadBooking",'#booking_history .booking_infinite','');	     
    	  break;
    	  
    	  case "address_form_select": 
+   	    placeholder(".delivery_instruction",'Delivery instructions');
    	    ajaxCall('getAddressBookDropDown', '');
    	    
    	    $(".contact_phone").attr("placeholder", t("Contact number") );
@@ -554,7 +617,14 @@ document.addEventListener('init', function(event) {
    	  break;
    	  
    	  case "map": 
-   	   ajaxCall('mapInfo', '');   	   
+   	   closePanel();   	   
+   	   if(app_settings = AppSettings()){   	   	  
+   	   	  $(".merchant_lat").val( app_settings.merchant_details.lat );
+   	   	  $(".merchant_lng").val( app_settings.merchant_details.lng );
+   	      merchantLocation('#map_canvas', app_settings.merchant_details.lat, app_settings.merchant_details.lng , app_settings.merchant_details.info_window );	   
+   	   } else {
+   	   	  showToast( t('Map not available') );
+   	   }   
    	  break;
    	  
    	  case "braintree_form":   	    
@@ -590,19 +660,28 @@ document.addEventListener('init', function(event) {
    	  break;
    	  
    	  case "order_sms_page":
-   	    ajaxCall('SendOrderSMSCode','');
+   	    params = ''; 
+   	    phone = getStorage("customer_number");   	    
+   	    if(!empty(phone)){
+   	    	params="customer_number="+ phone;
+   	    }
+   	    ajaxCall('SendOrderSMSCode',params);
    	  break;
    	  
    	  case "language":
-   	    ajaxCall('getlanguageList','');
+   	  case "startup_language":
+   	    //ajaxCall('getlanguageList','');
+   	    processDynamicAjax("getlanguageList", "" , "language_loader", '' , 1);
+   	    initPullHook("getlanguageList", "language_pull", "language_loader", "");   	    
    	  break;
    	
    	  case "device_id":
-   	    $(".device_token").html(device_id);
+   	    setDeviceInformation('device_information_list');
    	  break;
    	  
    	  case "points_main":
    	     ajaxCall("pointsSummary",'');
+   	     initPullHook('pointsSummary', 'pull_points_main','points_main_loader','');   	     	
    	  break;
    	  
    	  case "points_earn":
@@ -629,6 +708,8 @@ document.addEventListener('init', function(event) {
    	    $(".search-input ").removeClass("search-input--material");  
    	    setFocus('input_search_category');
    	    
+   	    placeholder("#input_search_category",'Search for category');
+   	    
    	    $( "#input_search_category" ).keyup(function( event ) {
    	    	if ( event.which == 13 ) {
 			    event.preventDefault();
@@ -651,6 +732,9 @@ document.addEventListener('init', function(event) {
    	  break;
    	
    	 case "search_item":   
+   	 
+   	   placeholder(".search_for_item",'Search for item'); 
+   	   
    	   $(".search-input ").removeClass("search-input--material");  
    	   
    	    setFocus('input_search_item');
@@ -685,23 +769,300 @@ document.addEventListener('init', function(event) {
    	   $('.order_id').val( page.data.order_id );
    	 break;
    	 
-   	 case "track_order":   	    
-   	    ajaxCall('getOrderHistory', "id=" +  page.data.order_id ); 
+   	 case "track_order":   	       
+   	    runOrderHistory(false);	   
+   	    enabledTrack(false);
+   	    params="id="+page.data.order_id ;  
+   	    $(".track_order_id").val(page.data.order_id);
+   	    processDynamicAjax("getOrderHistory", params , 'track_order_loader', "GET" , 1);
+   	    initPullHook('getOrderHistory', 'track_order_pull','track_order_loader',params);    	       
    	 break;
    	 
    	 case "tracking_map":   	    
+   	    runOrderHistory(false);
    	    initImageLoaded();
+   	    $(".track_order_id").val(page.data.order_id);
+   	    
+   	    less = 115;
+   	    if (ons.platform.isIPhoneX()) {
+   	    	less = 300;
+   	    }   	    
+   	    body_height = $("body").height();   	    
+   	    body_height = parseInt(body_height)-less;     	    
+   	    $(".map_canvas").css("height", body_height+"px");
+   	    
    	    ajaxCall('getTrackOrderData', "order_id=" +  page.data.order_id ); 
    	 break;
    	 
    	 case "custom_page":
-   	    ajaxCall('getPagesByID', "page_id=" +  page.data.page_id ); 
+   	    param = "page_id=" +  page.data.page_id;
+   	    ajaxCall('getPagesByID', param ); 
+   	    initPullHook('getPagesByID', 'custom_page_pull','custom_page_loader', param);    
    	 break;
    	 
-   	 case "add_review":
-   	   $(".review_order_id").val( page.data.order_id );   	  
+   	 case "add_review":   	   
+   	   placeholder(".review", t("What do you think of your order?") );   	    
+   	   $("#add_review .order_id").val( page.data.order_id );
+   	   ajaxCall("GetOrderInfo", "order_id=" + page.data.order_id );
    	 break;
    	 
+   	 case "map_enter_address":
+   	    $(".search-input").removeClass("search-input--material");
+   	    placeholder(".search_address", t("Search for your location") );   	    
+   	    
+   	    if(app_settings = AppSettings()){
+   	    	if(app_settings.map_provider.provider=="google.maps"){
+		   	    setTimeout(function() {		
+		 		   setFocus('search_address');
+		        }, 500); 
+   	    	}
+   	    }
+   	    
+   	    initGeocomplete('.search-input');   	    
+   	    processDynamicAjax("GetRecentLocation", '' ,'map_enter_address_loader', '', 1 ); 
+   	    initPullHook('GetRecentLocation', 'map_enter_address_pull','map_enter_address_loader');    
+   	    infinite_page = 0;
+   	    initInfiniteScroll(page,"GetRecentLocation",'#map_enter_address .map_enter_address_infinite');	    
+   	    
+   	 break;
+   	 
+   	 case "points_details":   	       	    
+   	    $("#points_details .page_title").html( page.data.page_title );
+   	    params = "point_type="+ page.data.point_type;
+   	    processDynamicAjax("PointsDetails", params ,'points_details_loader', '', 1 );   	    
+   	    initPullHook('PointsDetails', 'points_details_pull','points_details_loader',params);    	    
+   	    
+   	    infinite_page = 0;
+   	    initInfiniteScroll(page,"PointsDetails",'#points_details .points_details_infinite',params);
+   	 break;
+   	 
+   	 case "favorites":    	    
+   	    processDynamicAjax("FavoritesList", '' ,'favorites_loader', '', 1 ); 
+   	    initPullHook('FavoritesList', 'favorites_pull','favorites_loader','');    	   
+   	    infinite_page = 0; 
+   	    initInfiniteScroll(page,"FavoritesList",'#favorites .favorites_infinite','');
+   	 break;
+   	 
+   	 case "orders":
+   	   infinite_page=0;
+   	   initInfiniteScroll(page,"getOrders",'#orders .orders_infinite','');
+   	 break;
+   	 
+   	 case "cancel_order_form":   	   
+   	   $("#frm_cancel_order_form .order_id").val( page.data.order_id );   	   
+   	   placeholder(".cancel_reason",'state your reason for cancellation');
+   	   ajaxCall("GetOrderInfoCancel", "order_id=" + page.data.order_id );
+   	 break;
+   	 
+   	 case "reviews":
+   	   infinite_page=0;
+   	   initInfiniteScroll(page,"ReviewList",'#reviews .reviews_infinite','');
+   	 break;
+   	 
+   	 case "rate_driver":
+   	   stopTrackMapInterval();   	   
+   	   ajaxCall("GetTask", "task_id="+ page.data.task_id  )
+   	 break;
+   	 
+   	 case "search_order":   	    
+   	   $(".search-input ").removeClass("search-input--material");  
+   	   setFocus('search_order_field');
+   	   placeholder("#search_order_field",'Enter Order ID or Transaction Type');
+   	   
+   	   $( "#search_order_field" ).keyup(function( event ) {
+   	    	if ( event.which == 13 ) {
+			    event.preventDefault();
+			} else {				
+				destroyList('search_order_list');			
+				search_field_by_name = $(this).val();				
+				if(!empty(search_field_by_name)){
+					data = "search_str="+ search_field_by_name;				    
+				    processDynamicAjax("searchOrder", data , "search_order_loader","" ,1);
+				} else {										
+					/*if(!empty(ajax_request2)){						
+					    ajax_request2.abort();
+					}*/
+				}
+			}
+   	   });   	      	  
+   	 break;
+   	 
+   	 case "search_booking":
+   	   $(".search-input ").removeClass("search-input--material");  
+   	   setFocus('search_booking_field');
+   	   placeholder("#search_booking_field",'Enter booking ID or Restaurant Name');
+   	   
+   	   $( "#search_booking_field" ).keyup(function( event ) {
+   	    	if ( event.which == 13 ) {
+			    event.preventDefault();
+			} else {				
+				destroyList('search_booking_list');			
+				search_field_by_name = $(this).val();				
+				if(!empty(search_field_by_name)){
+					data = "search_str="+ search_field_by_name;				    
+				    processDynamicAjax("searchBooking", data , "search_booking_loader","" ,1);
+				} else {										
+					/*if(!empty(ajax_request2)){						
+					    ajax_request2.abort();
+					}*/
+				}
+			}
+   	   });   	   
+   	 break;
+   	 
+   	 case "booking_details":
+   	   params = "booking_id="+ page.data.booking_id;
+   	   processDynamicAjax("GetBookingDetails", params , "booking_details_loader","" ,1);
+   	   initPullHook('GetBookingDetails', 'booking_details_pull','booking_details_loader',params);    	   
+   	 break;
+   	 
+   	 case "startup_banner":
+   	   less = 220;
+   	    if (ons.platform.isIPhoneX()) {
+   	    	less = 300;
+   	    }   	    
+   	    banner_height = $("body").height();
+   	    banner_height = parseInt(banner_height)-less;   	    
+   	    $(".startup_banner_carousel").css("height", banner_height+"px");
+   	    
+   	    setStartUpBanner('startup_banner_carousel');
+   	    
+   	 break;
+   	 
+   	 case "favorites_item":
+   	    infinite_page=0;   	     	    
+   	    processDynamicAjax("ItemFavoritesList", "" , "favorites_item_loader",  '' , 1);
+   	    initPullHook("ItemFavoritesList", "favorites_item_pull", "favorites_item_loader");
+   	    initInfiniteScroll(page,"ItemFavoritesList",'.favorites_item_done','');	    
+   	 break;
+   	 
+   	 case "splitter":
+   	    setCustomePages(2,'splitter_list');   	    
+   	 break;
+   	 
+   	 case "addressbook_location":
+   	 
+   	    id = page.data.id;   	    
+   	    if(id>0){
+   	    	$(".addressbook_location_action").html( t("UPDATE") );
+   	    	ajaxCall('getAddressBookLocationByID', 'id='+id ); 
+   	    } else {
+   	       initMapAdress('#map_address', true);	
+   	    }   	    
+   	    preventTyping('.city_name');
+   	    preventTyping('.area_name');
+   	 break;
+   	 
+   	 case "location_state":
+   	   $(".search-input ").removeClass("search-input--material");  
+   	   setFocus('location_state_input');
+   	   
+   	    $( "#location_state_input" ).keyup(function( event ) {
+   	    	if ( event.which == 13 ) {
+			    event.preventDefault();
+			} else {				
+				destroyList('location_state_list');			
+				search_field_by_name = $(this).val();				
+				if(!empty(search_field_by_name)){
+					data = "search_str="+ search_field_by_name;				    
+				    processDynamicAjax("StateList", data , "location_state_loader","" ,1);
+				} 
+			}
+   	   });   	   
+   	   
+   	   infinite_page=0;
+   	   processDynamicAjax("StateList", "" , "location_state_loader",  '' , 1);
+   	   initPullHook("StateList", "location_state_pull", "location_state_loader");
+   	   initInfiniteScroll(page,"StateList",'.location_state_done','');	    
+   	    
+   	 break;
+   	 
+   	 case "location_city":
+   	   $(".search-input ").removeClass("search-input--material");  
+   	   setFocus('location_city_input');
+   	   
+   	    params="&state_id=" + page.data.state_id;
+   	   
+   	    $( "#location_city_input" ).keyup(function( event ) {
+   	    	if ( event.which == 13 ) {
+			    event.preventDefault();
+			} else {				
+				destroyList('location_city_list');			
+				search_field_by_name = $(this).val();				
+				if(!empty(search_field_by_name)){
+					data = "search_str="+ search_field_by_name;	
+					data+="&state_id=" + page.data.state_id;			    
+				    processDynamicAjax("CityList", data , "location_city_loader","" ,1);
+				} 
+			}
+   	   });   	
+   	   
+   	   infinite_page=0;   	      	      	   
+   	   processDynamicAjax("CityList", params , "location_city_loader",  '' , 1);
+   	   initPullHook("CityList", "location_city_pull", "location_city_loader",params); 
+   	   initInfiniteScroll(page,"CityList",'.location_city_done',params,'location_city_loader');	       	   
+   	 break;
+   	 
+   	 case "location_area":
+   	   $(".search-input ").removeClass("search-input--material");  
+   	   setFocus('location_area_input');
+   	   
+   	   params="&city_id=" + page.data.city_id;
+   	   
+   	   $( "#location_area_input" ).keyup(function( event ) {
+   	    	if ( event.which == 13 ) {
+			    event.preventDefault();
+			} else {				
+				destroyList('location_area_list');			
+				search_field_by_name = $(this).val();				
+				if(!empty(search_field_by_name)){
+					data = "search_str="+ search_field_by_name;	
+					data+="&city_id=" + page.data.city_id;			    
+				    processDynamicAjax("AreaList", data , "location_area_loader","" ,1);
+				} 
+			}
+   	   });   	
+   	   
+   	   infinite_page=0;   	      	      	   
+   	   processDynamicAjax("AreaList", params , "location_area_loader",  '' , 1);
+   	   initPullHook("AreaList", "location_area_pull", "location_area_loader",params); 
+   	   initInfiniteScroll(page,"AreaList",'.location_area_done',params,'location_area_loader');	       	   
+   	   
+   	 break;
+   	 
+   	 case "address_form_location":
+   	   customer_number = getStorage("customer_number");
+   	   if(!empty(customer_number)){
+   	  	  $(".contact_phone").val( customer_number );
+   	   }
+   	   initMapAdress('#map_address', true);	
+   	 break;
+   	 
+   	 case "change_password":
+   	   placeholder(".current_password",'Enter current password');
+   	   placeholder(".password",'Enter new password');
+   	   placeholder(".cpassword",'Confirm new password');
+   	 break;
+   	 
+   	 case "pickup_forms":
+   	   setFocus('contact_phone'); 
+   	   $(".pay_now_label").html( t("PAY")+ " " + $(".cart_total_value").val() );
+   	 break;
+   	 
+   	 case "contact_us":   	   
+   	   closePanel();
+   	   setContactUsFields('contact_us_list'); 	
+   	   setFocus('name');    
+   	 break;
+   	 
+   	 case "contact_us_ty":
+   	    $(".contact_us_message").html( page.data.message );
+   	    var page = onsenNavigator.topPage; 
+   	    page.onDeviceBackButton = function(event) {   	    	
+   	    	backToHome(1);
+   	    };
+   	  break;
+   	     	     	   	 
    } /*end switch*/
    
 });
@@ -750,62 +1111,100 @@ document.addEventListener('preshow', function(event) {
    	      $(".dialog_error_title").html( getStorage("dialog_error_title") );
    	      $(".dialog_error_msg").html(  getStorage("dialog_error_msg") );
    	    break;
+   	    
+   	    case "clear_cart_dialog":
+   	    translatePage();
+   	    break;
 	}	
 });
 
 /*TAB CHANGE*/
-document.addEventListener('prechange', function(event) {
-	dump('prechange');
+document.addEventListener('postchange', function(event) {
+	dump('postchange');
 	dump("tab index ->" + event.index);	
-	switch (event.index){
+	
+	current_page = document.querySelector('ons-navigator').topPage.id;
+	dump("=>"+ current_page);
+	/*if(current_page=="page_home"){
+	  if(event.index<=0){
+	  	 $("ons-fab.fab_floating_category").show();
+	  } else {
+	  	 $("ons-fab.fab_floating_category").hide();
+	  }
+	}*/
+	
+	if (current_page=="page_home"){
+
+		switch (event.index){
+			
+			case 0:		 		 
+			 getCartCount();
+			 break;
+			 
+			case 1:		  		 
+			   list_count = $("#reviews_list ons-list-item").length;  
+			   list_count = parseInt(list_count)+0;	
+			   if(list_count<=0){
+				   destroyList("reviews_list");	   
+				   processDynamicAjax("ReviewList", "" , 'reviews_loader',  '' , 1);			 
+				   initPullHook('ReviewList', 'reviews_pull','reviews_loader','');		 					 
+			   }
+			break;
+			
+			case 2:		  
+				if(isLogin()){
+					 setStorage("next_step",'home_page');		 
+					 list_count = $("#orders_list ons-list-item").length;
+					 list_count = parseInt(list_count)+0;		 
+					 if(list_count<=0){
+						 destroyList("orders_list");		 		
+						 fillOrderTabs("orders_tabs",0);		 
+						 $(".orders_tab_active").val("all");
+						 processDynamicAjax("getOrders", "tab=all"  , 'orders_loader',  '' , 1);			 
+						 initPullHook('getOrders', 'orders_pull','orders_loader','');		 	    		 	 
+					 }
+				} else {
+					$("#orders_tabs").attr('disabled',true);
+					$(".orders_loader").html( templateError(t("Get your first order, sign up now!"),t("Make your first order")));
+					$("#orders ons-toolbar-button").remove();
+				}
+			break;
+			
+			case 3:
+			    if(isLogin()){
+			    	profileMenu(true);
+			    	ajaxCall('getUserProfile', '');
+			    } else {
+			        profileMenu(false);
+			    }
+			break;
+			
+			case 4:
+			 showCart();
+			break;
+			
+			default:			 
+			 dump("carousel=>"+event.carousel.id);
+			 if(event.carousel.id=="k_carousel"){
+				  console.log('Changed to ' + event.activeIndex);	
+				  $(".dots li").removeClass("active");
+				  $(".c"+ event.activeIndex).addClass("active");
+				  $(".home_banner_index").val(event.activeIndex);
+			  }
+			break;
+			
+		}	 
 		
-		case 0:		 
-		 lang = getStorage("lang");
-		 old_lang = getStorage("old_lang");
-		 
-		 /*alert("lang : "+ lang);
-		 alert("old_lang : "+ old_lang);*/
-		 
-		 if(!empty(old_lang)){
-			 if(old_lang!=lang){
-			 	removeStorage("old_lang");
-			    backToHome();
-			 }
-		 }
-		 
-		 getCartCount();
-		 
-		 break;
-		 
-		case 1:		  
-		   paginate_count=1;
-		   paginate_result=0;
-		   ajaxCall('loadReviews', 'limit=10');
-		break;
+	}  else if( current_page=="startup_banner"){
+	    dump("carousel=>"+event.carousel.id);
+	    if(event.carousel.id=="startup_banner_carousel"){
+	    	console.log('Changed to ' + event.activeIndex);	
+		    $(".dots li").removeClass("active");
+		    $(".c"+ event.activeIndex).addClass("active");
+		    $(".startup_banner_index").val(event.activeIndex);
+	    }
+	}
 		
-		case 2:		  
-		 setStorage("next_step",'home_page');
-		 if(!isLogin()){		 			 	
-		 	$(".show_if_login").hide();
-		 	$(".show_if_notlogin").show();
-		 } else {
-		 	$(".show_if_notlogin").hide();
-		 	$(".show_if_login").show();
-		 	paginate_count=1;
-		 	paginate_result=0;
-		 	ajaxCall('getOrders', '');
-		 }
-		break;
-		
-		case 3:
-		    if(isLogin()){
-		    	profileMenu(true);
-		    	ajaxCall('getUserProfile', '');
-		    } else {
-		        profileMenu(false);
-		    }
-		break;
-	}	
 	translatePage();	
 });
 
@@ -816,60 +1215,100 @@ document.addEventListener('reactive', function(event) {
 
 document.addEventListener('postpop', function(event) {
 	dump("postpop");
-	dump(event);
-	if (!empty(trackmap_interval)){		
-		stopTrackMapInterval();
+	current_page = document.querySelector('ons-navigator').topPage.id
+	dump("=>"+ current_page);
+	
+	ons.platform.select('android');
+	
+	switch(current_page){
+		case "page_home":
+		  active_index = document.querySelector('ons-tabbar').getActiveTabIndex();
+	      dump("active_index=>"+ active_index);
+	      if(active_index==4){
+	      	 document.querySelector('ons-tabbar').setActiveTab(0);	      	 	      	 
+	      } else if (active_index==0){	      	 
+	      	//
+	      } else if(active_index==2){
+	      	 runOrderHistory(false);
+	      }
+	      
+	      setTimeout(function(){	    
+   	   	    runHomeBanner(false);
+          },400);
+	      	 
+		break;
+		
+		case "track_order":
+		  stopTrackMapInterval();
+		  runOrderHistory(true);
+		break;
+		
+		case "search_order":
+		case "receipt":
+		  runOrderHistory(false);
+		break;
+		
+		case "settings_menu":
+		  clearInterval(test_loader);
+		break;
+		
+		case "startup_banner":		  
+		  runStartUpBanner(false);
+		break;
+		
+		case "page_item_details":
+		  removeStorage("next_step");
+		break;				
+		
 	}
+	
+	/*if (!empty(trackmap_interval)){		
+		stopTrackMapInterval();
+	}*/
 });
 
 document.addEventListener('preopen', function(event) {
 	dump("preopen");
+	var page_id = event.target.id;   
+	dump("preopen : "+ page_id);
 	
-	translatePage();
-	
-	if(settings = AppSettings()){   	  	 
-   	  if(settings.booking_disabled=="2"){   	  	 
-   	  	 $(".menu_book").hide();
-   	  }
-   	  if(settings.gallery_disabled=="yes"){   	  	 
-   	  	 $(".menu_photo").hide();
-   	  }
-   	}   	     
-   	
-   	if(!isLogin()){
-   		$(".show_if_login").hide();
-   		$(".show_if_not_login").show();
-   	} else {
-   		$(".show_if_login").show();
-   		$(".show_if_not_login").hide();
-   		
-   		$(".left_panel h5").html( getStorage("profile_name") );
-   		$(".left_panel img").attr( "src", getStorage("profile_avatar") );
-   		initImageLoaded();
+	translatePage();		   	   	   	   
+   	switch(page_id){
+   		case "menu":
+   		  if(settings = AppSettings()){   	  	 
+		   	  if(settings.booking_disabled=="2"){   	  	 
+		   	  	 $(".menu_book").hide();
+		   	  }
+		   	  if(settings.gallery_disabled=="yes"){   	  	 
+		   	  	 $(".menu_photo").hide();
+		   	  }
+		   	  
+		   	  if(settings.contact_us_enabled!=1){ 
+		   	     $(".menu_contactus").hide();
+		   	  }
+		   }   	    
+			
+		  if(isLogin()){   		
+		     $(".left_panel img").attr( "src", getStorage("profile_avatar") );
+		  }    	  
+   		break;
    	}
 	
 });
 
-document.addEventListener('postchange', function(event) {
-	dump("postchange");	
-	index = event.activeIndex;	
-	dump(index);
-	
-	$(".dots li").removeClass("active");
-	$(".dots li.c" + index ).addClass("active");	
-});
 
-/*SHOW*/
-/*document.addEventListener('show', function(event) {
-   dump('show page');   
-   var page_id = event.target.id;   
-   dump(page_id);
-   switch(page_id){
-   	  case "signup":   	      	   
-   	    $(".frm_register").validate();
-   	  break;
-   }
-});*/
+document.addEventListener('prehide', function(event) {		
+	var page = event.target;
+	var page_id = event.target.id;   
+	dump("prehide : "+ page_id);
+	
+	switch (page_id){
+		default:
+		ons.platform.select('android');
+		break;
+	}
+	
+});
 
 var showLoader = function(show) {
 	//var modal = document.querySelector('ons-modal');
@@ -882,6 +1321,11 @@ var showLoader = function(show) {
 };
 
 var openMenu = function() {
+  if(settings = AppSettings()){
+  	if(settings.is_rtl==1){
+  	   $("ons-splitter-side").attr("side","right");
+  	}
+  }
   var menu = document.getElementById('menu');
   menu.open();
 };
@@ -894,18 +1338,18 @@ loadPage = function(page) {
 
 var infiniteCategory = function(done) {	
   
-  var infinite_category = getStorage("infinite_category");
-  if (infinite_category==1){
-  	 dump("finish");  	 
-  	 return;
-  }
+  infinite_scroll_done = $("#page_category .infinite_scroll_done").val();
+  infinite_scroll_done = parseInt(infinite_scroll_done);
+  if(infinite_scroll_done>0){
+	 dump("finish");
+	 done();
+	 return;
+ }
     
   var data='';
-  var ajax_uri = ajax_url+"/loadCategory";
-  data+="merchant_keys=" + krms_config.MerchantKeys;
-  data+="&page=" + page_category;
-  
-  data+="&lang="+ getLangCode();
+  var ajax_uri = ajax_url+"/loadCategory";  
+  data+="&page=" + page_category; 
+  data+=requestParams();
   
   dump(ajax_uri + "?"+ data);	
   
@@ -913,24 +1357,26 @@ var infiniteCategory = function(done) {
 	  url: ajax_uri,
 	  method: "GET",
 	  data: data ,
-	  dataType: "jsonp",
-	  timeout: 20000,
+	  dataType: "json",
+	  timeout: ajax_timeout,
 	  crossDomain: true,
 	  beforeSend: function( xhr ) {           
          if(ajax_request != null) {	
          	dump("request aborted");     
          	ajax_request.abort();
             clearTimeout(timer);
+            //$(".category_loader").html('');
          } else {         	
-         	timer = setTimeout(function() {				
+         	$(".category_loader").html(icon_loader);
+         	timer = setTimeout(function() {	         		
 				ajax_request.abort();
 				showToast( t('Request taking lot of time. Please try again') );
-	        }, 20000); 
+	        }, ajax_timeout); 
          }
       }
     });
     
-     ajax_request.done(function( data ) {
+     ajax_request.done(function( data ) {     	
      	page_category++;
         dump("done ajax");
         dump(data);      
@@ -938,12 +1384,15 @@ var infiniteCategory = function(done) {
            displayCategory(data.details.data);     
            done();
         } else {        
-        	setStorage("infinite_category", 1);
+        	page_category=1;
+        	$("#page_category .infinite_scroll_done").val(1);
+        	done();
         }        
     });
     
      /*ALWAYS*/
     ajax_request.always(function() {
+    	$(".category_loader").html('');
         dump("ajax always");
         ajax_request=null;  
         clearTimeout(timer);
@@ -961,39 +1410,30 @@ var infiniteCategory = function(done) {
 
 
 /*mycall*/
-function ajaxCall(action, data  )
-{
-		
+function ajaxCall(action, data , method )
+{	
+	
 	var ajax_uri = ajax_url+"/"+action;
 	
-	data+="&merchant_keys=" + krms_config.MerchantKeys;	
-	data+="&device_id=" + device_id;
-	data+="&device_platform=" + device_platform;
+	if(empty(method)){
+		method='GET';
+	} else {	    
+	    if(method=="POST"){
+		   ajax_uri+="?post=1";
+		}
+	}		
 	
-	token = getStorage("token");
-	if (!empty(token)){
-		data+="&token=" + token;
-	}
-	
-	transaction_type = $(".transaction_type").val();
-	if(!empty(transaction_type)){
-		data+="&transaction_type=" + transaction_type;
-	}
-	
-		
-	data+="&lang="+ urlencode(getLangCode());
-	
+	data+=requestParams();
+			
 	dump("METHOD=>" + action );
-	dump(ajax_uri + "?"+ data);	
-	
-	//alert("params=>"+data);	
-	
+	//dump(ajax_uri + "?"+ data);	
+		
 	var ajax_request = $.ajax({
 	  url: ajax_uri,
-	  method: "GET",
+	  method: method,
 	  data: data ,
-	  dataType: "jsonp",
-	  timeout: 30000,
+	  dataType: "json",
+	  timeout: ajax_timeout,
 	  crossDomain: true,
 	  beforeSend: function( xhr ) {
          dump("before send ajax");   
@@ -1012,7 +1452,7 @@ function ajaxCall(action, data  )
          		}
          		showLoader(false);
 				showToast( t('Request taking lot of time. Please try again') );
-	        }, 30000); 
+	        }, ajax_timeout); 
          }
       }
     });
@@ -1033,7 +1473,7 @@ function ajaxCall(action, data  )
 	        	  	  removeStorage("category_is_delayed");
 		        	  setTimeout(function(){ 
 		        	  	  displayCategory(data.details.data);
-		        	  }, 1000);
+		        	  }, 100);
 	        	  } else {
 	        	  	 displayCategory(data.details.data);
 	        	  }
@@ -1044,13 +1484,15 @@ function ajaxCall(action, data  )
 	        	break;
 	        	
 	        	case "loadItemByCategory":
-	        	   $(".cat_id").val( data.details.cat_id);
+	        	   //$(".cat_id").val( data.details.cat_id);
+	        	   destroyList("infinite_item");
 	        	   displayItem(data.details.data , data.details.cat_id);
 	        	   paginate_count++;
 	        	   //initImageLoaded();
 	        	break;
 	        	
-	        	case "loadItemDetails": 	        	  	        	  
+	        	case "loadItemDetails": 	
+	        	  $("#page_item_details ons-bottom-toolbar").show();        	  	        	  
 	        	  $("#page_item_details .center").html( data.details.data.item_name );
 	        	  $(".category_id").val(data.details.cat_id);
 	        	  tpl = displayItemDetails(data.details.data , data.details.cart_data);
@@ -1065,6 +1507,9 @@ function ajaxCall(action, data  )
 						$("#page_item_details ons-bottom-toolbar").hide();
 					}
 				  }
+				  
+				  fillFavorite('.favorite_button',data.details.is_favorite);				 
+				  initImageLoaded();
 
 	        	break;
 	        	
@@ -1077,6 +1522,7 @@ function ajaxCall(action, data  )
 	        	
 	        	case "removeCartItem":
 	        	  loadCart();
+	        	  getCartCount();
 	        	break;
 	        	
 	        	case "applyVoucher":
@@ -1106,16 +1552,19 @@ function ajaxCall(action, data  )
 	        	case "customerRegister":
 	        	case "fbRegister":
 	        	case "LoginGoogle":
+	        	case "SocialLogin":
 	        	 
 	        	  if (!empty(data.details.contact_phone)){
 	        	  	  setStorage("customer_number",data.details.contact_phone);
-	        	  } 
+	        	  	  setStorage("customer_number1",data.details.contact_phone);
+	        	  } else {
+	        	  	  //removeStorage("customer_number");
+	        	  	  removeStorage("customer_number1");
+	        	  }	        
 	        	
 	        	  setStorage("token", data.details.token);
 	        	  next_step = data.details.next_step;
-	        	  
-	        	  handlePushRegister();
-	        	  
+	        	  	        	  	        	  
 	        	  if ( next_step=="delivery_address_option"){
 	        	  	  showPage('address_form.html');
 	        	  } else if ( next_step=="payment_option"){
@@ -1145,25 +1594,26 @@ function ajaxCall(action, data  )
 				 } else if ( next_step=="order_sms_page" ) {
 	        	  	  showPage('order_sms_page.html');
 	        	  	  	  
+	        	 } else if ( next_step=="add_favorite" ) {
+	        	  	  popPage();
 	        	  } else {
 	        	  	  backToHome(1);
 	        	  }
 	        	break;
 	        	
 	        	case "setDeliveryAddress":	       
-	        	case "setAddressBook": 		        	   	        	   
-	        	   //popPage();	        	   
-	        	   onsenNavigator.resetToPage('cart.html',{
-		  	          animation : "slide"		  	          
-		           });	
-	        	   
+	        	case "setAddressBook": 		    
+	        	case "setDeliveryLocationFee":    
+	        	case "setAddressBookLocation":	   	    
+	        	
+	        	   popPage();
+	        	   	        	   	        	  
 	        	   $(".delivery_address").val( data.details.complete_address );
 	        	   printDeliveryAddress(data.details.complete_address);
-	        	   if ( data.details.save_address==1){
-	        	   	   setStorage("save_address",1);
-	        	   } else {
-	        	   	   removeStorage('save_address');
-	        	   }	        	  
+	        	   
+	        	   setTimeout(function() {				     
+				 	  loadCart();
+				   }, 10);
 	        	break;
 	        	
 	        	case "setAddressBook_OLD":
@@ -1197,10 +1647,22 @@ function ajaxCall(action, data  )
 	        	  
 	        	  fillCountryList(data.details.country_list, data.details.country_code);
 	        	  
+	        	  if(!empty(data.details.delivery_lat)){
+	        	  	  fillMapAddress('#map_address', true, data.details.delivery_lat, data.details.delivery_long );
+	        	  	  $(".lat").val( data.details.delivery_lat );
+	        	      $(".lng").val( data.details.delivery_long );
+	        	  } else {
+                     initMapAdress('#map_address', true);
+	        	  }
+	        	  
 	        	break;
 	        	
 	        	case "getUserProfile":
+
+	        	  setStorage("social_strategy", data.details.data.social_strategy );      	  
+	        	
 	        	  $(".profile_name").html( data.details.data.first_name +" "+ data.details.data.last_name );
+	        	  
 	        	  setStorage("enabled_push", data.details.data.enabled_push )
 	        	  
 	        	  if ($('#customer_profile').is(':visible')) {		
@@ -1212,6 +1674,7 @@ function ajaxCall(action, data  )
 	        	  	        	  
 	        	  $(".profile_header h5").html( data.details.data.full_name);
 	        	  $(".profile_header img").attr("src", data.details.data.avatar );
+	        	  $(".profile_header .email").html(data.details.data.email_address);
 	        	  initImageLoaded();
 	        	  
 	        	break;
@@ -1238,9 +1701,7 @@ function ajaxCall(action, data  )
 	        	  next_step  = getStorage("next_step");
 	        	  dump(next_step);
 	        	  setStorage("token", data.details.token );
-	        	  
-	        	  handlePushRegister();
-	        	  
+	        	  	        	  
 	        	  if ( next_step == "payment_option"){
 	        	  	 //showPage('payment_option.html');	        	  	  
 	        	  	  onsenNavigator.replacePage('payment_option.html',{
@@ -1248,8 +1709,10 @@ function ajaxCall(action, data  )
 		              });	
 	        	  } else if ( next_step=="order_sms_page" ) {
 	        	  	  showPage('order_sms_page.html');
+	        	  } else if ( next_step=="add_favorite" ) {	  
+	        	  	  popPage();
 	        	  } else {
-	        	  	 backToHome(1);
+	        	  	  backToHome(1);
 	        	  }
 	        	break;
 	        	
@@ -1261,12 +1724,14 @@ function ajaxCall(action, data  )
    	              if (next_step=="payment_option"){
    	              	 ajaxCall('selectCreditCards', '');
    	              } else {	        	  		        	  
-		        	  ajaxCall2('getCreditCards', '' );
+		        	  //ajaxCall2('getCreditCards', '' );	
+		        	  resetPaginate('getCreditCards','ons_creditcard_list',"#creditcard_list .creditcard_infinite",'creditcard_list_loader','');
    	              }
 	        	break;
 	        	
 	        	case "deleteCard":	    	        	  
-	        	  ajaxCall2('getCreditCards', '' ); 
+	        	  //ajaxCall2('getCreditCards', '' );       	  	        	  
+	        	  resetPaginate('getCreditCards','ons_creditcard_list',"#creditcard_list .creditcard_infinite",'creditcard_list_loader','');
 	        	break;
 	        	
 	        	case "getCards":
@@ -1282,11 +1747,11 @@ function ajaxCall(action, data  )
 	        	case "saveAddressBook":	        
 	        	  showToast(data.msg);	   
 	        	  popPage();    	 
-	        	  ajaxCall2('getAddressBookList', '');
+	        	  resetPaginate("getAddressBookList","ons_addressbook_list","#addressbook_list .addressbook_infinite","addressbook_list_loader",'');	        	
 	        	break;
 	        	
-	        	case "deleteAddressBook":
-	        	  ajaxCall2('getAddressBookList', '');
+	        	case "deleteAddressBook":	        	
+	        	  resetPaginate("getAddressBookList","ons_addressbook_list","#addressbook_list .addressbook_infinite","addressbook_list_loader",'');
 	        	break;
 	        	
 	        	case "getAddressBook":	        	  
@@ -1300,9 +1765,18 @@ function ajaxCall(action, data  )
 	        	    $(".as_default").prop('checked', true);
 	        	  } else {
 	        	  	$(".as_default").prop('checked', false);
-	        	  }
-	        	  
+	        	  }	        	  
 	        	  fillCountryList(data.details.country_list, data.details.country_code);
+	        	  
+	        	  lat = data.details.latitude;
+	        	  lng = data.details.longitude;
+	        	  if(!empty(lat)){	        	  	 
+	        	  	 $("#addressbook .lat").val( lat );
+	        	  	 $("#addressbook .lng").val( lng );
+	        	  	 fillMapAddress('#map_address', true, lat , lng );
+	        	  } else {
+	        	  	 initMapAdress('#map_address', true);
+	        	  }
 	        	  
 	        	break;
 	        	
@@ -1325,7 +1799,8 @@ function ajaxCall(action, data  )
 	        	    
 	        	break;
 	        	
-	        	case "reOrder":
+	        	case "reOrder":	        	
+	        	case "ReOrder":	        	
 	        	  showCart();
 	        	break;
 	        	
@@ -1368,47 +1843,9 @@ function ajaxCall(action, data  )
 					  });  
 	        	break;
 	        	
-	        	case "getMerchantInfo":
-	        	   info = '<h2>'+data.details.data.merchant_name+'</h2>';
-	        	   info+= '<h3>'+data.details.data.cuisine+'</h3>';
-	        	   info+= '<p class="small">'+data.details.data.rating_text+'</p>';
-	        	   info+= '<p class="small">'+data.details.data.address+'</p>';	        	   
-	        	   $(".info_wrap").html( info );
-	        	   
-	        	   html='';
-	        	   if($.isArray( data.details.data.opening_hours )) {	        	   	  
-	        	   	  html+='<ons-list-title modifier="list_title_grey">' + t('OPENING HOURS') +'</ons-list-title>';
-	        	   	  html+='<ons-list modifier="list_menu">';
-	        	   	  $.each( data.details.data.opening_hours  , function( hour_key, hour_val ) {
-	        	   	  	  html+='<ons-list-item >';
-	        	   	  	    html+='<div class="center">'+ hour_val.day +'</div>';
-	        	   	  	    html+='<div class="right">'+ hour_val.hours +'</div>';	        	   	  	    
-	        	   	  	  html+='</ons-list-item>';
-	        	   	  });
-	        	   	  html+='</ons-list>';
-	        	   }
-	        	   
-	        	   if (!empty(data.details.data.payment_list)){
-	        	   	   html+='<ons-list-title modifier="list_title_grey">' + t('PAYMENT METHODS') + '</ons-list-title>';
-	        	   	   html+='<ons-list modifier="list_menu">';
-	        	   	   $.each( data.details.data.payment_list  , function( pay_key, pay_val ) {
-	        	   	   	   dump(pay_val);
-	        	   	   	   html+='<ons-list-item >';
-	        	   	   	   html+='<div class="left"><ons-icon icon="md-card" size="25px"></ons-icon></div>';	
-	        	   	  	    html+='<div class="center">'+ pay_val +'</div>';	        	   	  	    
-	        	   	  	  html+='</ons-list-item>';
-	        	   	   });
-	        	   	   html+='</ons-list>';
-	        	   }
-	        	   
-	        	   if ( !empty(data.details.data.information) ){
-	        	   	   html+='<div class="wrap" style="border-top:1px solid #eee;">';
-	        	   	   html+='<p>' + data.details.data.information +'</p>';
-	        	   	   html+='</div>';
-	        	   }
-	        	   
-	        	   $(".info_wrap2").html( html );
-	        	   
+	        	case "getMerchantInfo":	        	    
+	        	   setgetMerchantInfo(data.details.data);
+	        	   initRatyStatic();
 	        	break;
 	        	
 	        	case "getMerchantPhoto":	  
@@ -1422,8 +1859,7 @@ function ajaxCall(action, data  )
 	        	    	tpl = displayPromo(data.details.data);    
 	        	    	$(".promo_wrap").html( tpl );
 	        	    } else {
-	        	    	$(".promo_wrap").html( '' );
-	        	    	showToast(data.msg);
+	        	    	$(".promo_wrap").html( templateError(data.details.title,data.details.sub_title) );
 	        	    }
 	        	break;
 	        	
@@ -1456,7 +1892,7 @@ function ajaxCall(action, data  )
 	        	case "payPaypal":
 	        	case "razorPaymentSuccessfull":
 	        	case "braintreePay":
-	        	case "PayAuthorize":
+	        	case "PayAuthorize":	        	
 	        	  showReceipt(data);
 	        	break;
 	        	
@@ -1480,7 +1916,7 @@ function ajaxCall(action, data  )
 	        	  if ( next_step=="delivery_address_option"){
 	        	  	  showPage('address_form.html');
 	        	  } else if ( next_step=="payment_option"){
-	        	  	  showPage('payment_option.html');	  
+	        	  	  showPage('payment_option.html');
 	        	  } else if ( next_step=="order_sms_page" ) {
 	        	  	  showPage('order_sms_page.html');      	  
 	        	  } else {
@@ -1489,7 +1925,9 @@ function ajaxCall(action, data  )
 	        	break;
 	        	
 	        	case "SendOrderSMSCode":
+	        	  showToast(data.msg);
 	        	  $(".order_sms_session").val( data.details.sms_order_session );	        	  
+	        	  $(".verify_order_sms").attr("disabled",false);
 	        	break;
 	        	
 	        	case "verifyOrderSMSCODE":	        		        	  
@@ -1556,10 +1994,9 @@ function ajaxCall(action, data  )
 			      });	
 	        	break;
 	        	
-	        	case "pointsSummary":
-	        	  $(".pts_total_earn").html( data.details.total_available );
-	        	  $(".pts_total_expenses").html( data.details.total_expenses );
-	        	  $(".pts_total_expired").html( data.details.total_expiring );
+	        	case "pointsSummary":	        	  
+	        	  destroyList('points_main_list');
+	        	  setPoints('points_main_list',data.details.data);
 	        	break;
 	        	
 	        	case "pointsGetEarn":
@@ -1597,39 +2034,45 @@ function ajaxCall(action, data  )
 	        	break;
 	        	
 	        	case "CancelOrder":	        	  
-	        	  ajaxCall('getOrders', '');
+	        	  reloadOrderList();
 	        	break;
 	        	
 	        	case "getTrackOrderData":
-	        	
-	        	  $(".driver_avatar img").attr("src", data.details.driver_info.photo);
+
+	        	  $(".driver_avatar.img").attr("src", data.details.driver_info.photo);
 	        	  $(".driver-name").html( data.details.driver_info.driver_name );	        	  
 	        	  
 	        	  $(".driver_phone").val( data.details.driver_info.phone );
-	        	  $(".driver_id").val( data.details.driver_info.driver_id );
-	        	
-	        	  settings = AppSettings();
-	        	  if (settings.map_provider=="mapbox"){
-	        	  	  
-	        	  	 mapboxTrack("map_canvas", {
-			 		 	lat : data.details.task_info.lat,
-			 		 	lng : data.details.task_info.lng,
-			 		 	show_info: true,
-			 		 	info_html : t("destination") ,	 	
-			 		 	use_icon:true,
-			 		 	icon: data.details.icons.destination,
-			 		 	draggable : false
-			 		 }, data.details );
-	 		 
-	        	  } else {
-	        	  	  googleMapTrack(".map_canvas", {
-	        	  	  	lat : data.details.task_info.lat,
-			 		 	lng : data.details.task_info.lng,
-	        	  	  }, data.details );
-	        	  }
-	        	  
-	        	  trackmap_interval = setInterval(function(){runTrackMap()}, 10000);
-	        	  	
+	        	  $(".track_task_id").val( data.details.task_id );
+	        	         	  
+	        	  datas = {
+	        	  	status_raw:data.details.status_raw,
+	        	  	rating:data.details.rating,
+	        	  	driver_avatar : data.details.driver_info.photo,
+	        	  	driver_name : data.details.driver_info.driver_name
+	        	  };
+	        	  if( checkTaskStatus(datas)){
+	        	  	  return ;
+	        	  }				 		
+	        	  	        	  
+	        	  new_datas = {
+	        	  	driver_lat: data.details.driver_info.lat,
+	        	  	driver_lng: data.details.driver_info.lng,
+	        	  	map_icons : {
+	        	  		driver : data.details.icons.driver,
+	        	  		delivery : data.details.icons.destination,
+	        	  		dropoff : data.details.icons.dropoff
+	        	  	},	        	
+	        	  	task_lat:  data.details.task_info.lat,
+	        	  	task_lng:  data.details.task_info.lng,
+	        	  	dropoff_lat : data.details.dropoff_info.lat,
+	        	  	dropoff_lng : data.details.dropoff_info.lng
+	        	  };
+	        	  dump(new_datas);	        	 
+	        	  iniTrackMap('#map_canvas', new_datas );	        	  
+	        	  	        	  	        	  
+	        	  trackmap_interval = setInterval(function(){runTrackMap()}, interval_timeout);
+	        	  	        		        	 
 	        	break;
 	        	
 	        	case "getPages":
@@ -1638,13 +2081,13 @@ function ajaxCall(action, data  )
 	        	
 	        	case "getPagesByID":
 	        	  $(".custom_page_title").html( data.details.data.title );
-	        	  $(".custom_page_content").html( data.details.data.content );
+	        	  $(".custom_page_loader").html( '<div class="text_content">'+data.details.data.content+'</div>' );
 	        	break;
 	        	
 	        	case "clearNotification":
-	        	  paginate_count=1;
-		          paginate_result=0;
-   	              ajaxCall('loadNotification','');		
+	        	  infinite_page=0;
+	        	  destroyList('notification_list');
+	        	  processDynamicAjax("GetNotification", "" , "notification_loader",  '' , 1);
 	        	break;
 	        	
 	        	case "addReview":	        	  	        	 
@@ -1661,13 +2104,191 @@ function ajaxCall(action, data  )
 				   });	
 	        	break;
 	        	
-	        	default:
+	        	case "GetOrderInfo":
+	        	  setOrderHistory('#add_review .details_with_logo', data.details.data);
+	        	  $(".review_as").html( data.details.data.review_as );
+	        	  $(".review").val( data.details.data.review );
+	        	  $(".rating").val( data.details.data.rating );
+	        	  
+	        	  if(data.details.data.as_anonymous==1){
+	        	     document.querySelector('ons-checkbox').checked = true;
+	        	  } else {
+	        	  	 document.querySelector('ons-checkbox').checked = false;
+	        	  }	        
+	        	  setTimeout(function() {	
+					   initRaty("#add_review .raty-stars",data.details.data.rating);
+				       initImageLoaded();					       
+				  }, 100); 
+	        	break;
+	        	
+	        	case "addReviewNew":
+	        	  reloadOrderList();
+	        	break;
+	        	
+	        	case "GetOrderInfoCancel":
+	        	   setOrderHistory('#cancel_order_form .details_with_logo', data.details.data);
+	        	   setTimeout(function() {	
+					   //initRatyStatic();
+				       initImageLoaded();					       
+				  }, 100); 
+	        	break;
+	        	
+	        	case "GetTask":
+	        	  $("#rate_driver .task_id").val( data.details.data.task_id);
+	        	  $("#rate_driver .rating").val( data.details.data.rating);
+	        	  $("#rate_driver .review").val( data.details.data.rating_comment);
+	        	  
+	        	  setGetTask('#rate_driver .details_with_logo',data.details.data);
+	        	  $("#rate_driver .review_as").html( data.details.data.review_as);
+	        	  document.querySelector('ons-checkbox').checked = data.details.data.rating_anonymous;
+	        	  setTimeout(function() {	
+					   initRaty("#rate_driver .raty-stars",data.details.data.rating);
+				       initImageLoaded();					       
+				  }, 100); 
+	        	break;
+	        	
+	        	case "RateTask":
+	        	  showToast(data.msg);
+	        	  setTimeout(function() {	
+	        	     popPage();
+	        	  }, 100); 
+	        	break;
+	        	
+	        	case "ClearLocation":
+	        	  destroyList('map_enter_address_list'); 	        
+	        	break;
+	        	
+	        	case "AddFavorite":
+	        	  fillFavorite('.favorite_button',true);
+	        	  showToast(data.msg);
+	        	break;
+
+	        	case "RemoveFavorite":        		        	  
+	        	  fillFavorite('.favorite_button',false);	        	  
+	        	break;
+	        	
+	        	case "RemoveFavoriteByID":
+	        	     infinite_page=0;  
+	        	     destroyList('favorites_item_list');
+	        	  	 $(".favorites_item_done").val(0);
+   	                 processDynamicAjax("ItemFavoritesList", "" , "favorites_item_loader",  '' , 1);
+	        	break;
+	        	
+	        	case "SaveAddresBookLocation":
+	        	  showToast(data.msg);
+	        	  popPage();
+	        	  setTimeout(function(){	   
+	        	  	  $(".addressbook_list_loader").html('');
+	        	  	  destroyList('ons_addressbook_list');
+        		  	  $("#addressbook_list .addressbook_infinite").val(0);
+        		  	  infinite_page=0;
+	        	  	  ajaxCall2('getAddressBookList', ''); 
+	              },100);
+	        	break;
+	        	
+	        	case "getAddressBookLocationByID":
+	        	  if(!empty(data.details.data.lat)){
+	        	  	  fillMapAddress('#map_address', true, data.details.data.lat, data.details.data.lng );
+	        	  	  $(".lat").val( data.details.data.lat );
+	        	      $(".lng").val( data.details.data.lng );
+	        	  } else {
+	        	  	 initMapAdress('#map_address', true);
+	        	  }
+	        	  
+	        	  setValue(".book_location_id", data.details.data.id );	
+	        	  setValue(".street", data.details.data.street );	
+	        	  setValue(".location_name", data.details.data.location_name );
+	        	  if(data.details.data.as_default==1){
+	        	    $(".as_default").prop('checked', true);
+	        	  } else {
+	        	  	$(".as_default").prop('checked', false);
+	        	  }		        	  
+	        	  setValue(".state_id", data.details.data.state_id );	
+	        	  setValue(".state_raw", data.details.data.state_name );	
+	        	  setValue(".state_name", data.details.data.state_name );	
+	        	  
+	        	  setValue(".country_id", data.details.data.country_id );	
+	        	  setValue(".country_name", '' );	
+	        	  
+	        	  setValue(".city_id", data.details.data.city_id );	
+	        	  setValue(".city_name_raw", data.details.data.city_name );	
+	        	  setValue(".city_name", data.details.data.city_name );	
+	        	  
+	        	  setValue(".area_id", data.details.data.area_id );	
+	        	  setValue(".area_name_raw", data.details.data.area_name );	
+	        	  setValue(".area_name", data.details.data.area_name );	
+	        	  
+	        	break;
+	        	
+	        	case "ContactUs":
+	        	   onsenNavigator.pushPage('contact_us_ty.html',{
+					  	animation : "slide",
+					  	data : { 					  	  
+					  	  'message': data.msg					  	  
+					  	 }
+					  });  
+	        	break;
+	        		        		        	
+	        	case "preCheckout":
+	        	
+	        	   confirm_future_order = false;
+	        	   if(settings = AppSettings()){
+	        	   	  if (settings.confirm_future_order==1){
+	        	   	  	  confirm_future_order = true;
+	        	   	  }	        	   
+	        	   }
+	        	
+	        	   if(data.details.is_pre_order==1  && confirm_future_order==true){
+	        	   	
+	        	   	  ons.platform.select('ios'); 	        	   	  
+	        	   	  ons.notification.confirm( data.details.message ,{
+						title: dialog_title,
+						buttonLabels : [  t("Yes"), t("Cancel") ]
+					  }).then(function(input) {
+	        	   	     if(input<=0){
+	        	   	     	checkout();
+	        	   	     }
+					  });
+					  
+	        	   } else {
+	        	   	  checkout();
+	        	   }
+	        	break;
+	        	
+	        	default:	        	  
 	        	  showAlert(data.msg);
 	        	break;
 	        	
 	        	/*end mycall*/
 	        }
-	        
+	    
+       /*FAILED RESPONSE*/	        
+	    } else if ( data.code==6){
+	    	
+	    	switch (action){
+	    		case "loadItemDetails":
+	    		  $(".page_item_details_loader").html( templateError(data.details.title,data.details.sub_title) );
+        		  $(".item_details_wrap").html( '' ) ;
+        		  $("#page_item_details ons-bottom-toolbar").hide();
+	    		break;
+	    		
+	    		case "loadItemByCategory":	    	    		  
+	    		  destroyList('infinite_item');
+	    		  $(".loader_item").html( templateError(data.details.title,data.details.sub_title) ); 		 
+	    		break;
+	    		
+	    		case "loadCategory":
+	    		  destroyList('infinite_category');
+	    		  $(".category_loader").html( templateError(data.details.title,data.details.sub_title) ); 		 
+	    		break;	    		
+	    		
+                case "getPagesByID":	    		  
+	    		  $(".custom_page_title").html( '' );	        	  
+	        	  $(".custom_page_loader").html( templateError(data.details.title,data.details.sub_title) );	    		  
+	    		break;		
+	    		
+	    	}	    	
+	     	
         } else if ( data.code==10){
         	// invalid merchant key        	
         	dialogInvalidKey();
@@ -1677,9 +2298,13 @@ function ajaxCall(action, data  )
         	setStorage("dialog_error_msg" , data.msg);
         	dialogError();
         } else {
-        	/*FAILED RESPONSE*/        	
+        	/*FAILED RESPONSE*/
         	switch (action)
         	{
+        		case "loadCategory":
+        		  initImageLoaded();
+        		  showToast(data.msg);
+        		break;
         		
         		case "loadReviews":	                		  
         		  $("#infinite_reviews").html('');        		  
@@ -1689,6 +2314,7 @@ function ajaxCall(action, data  )
         		case "loadNotification":
         		   $("#infinite_notification").html('');        		   
         		   $(".clear_notification").hide();
+        		   showToast(data.msg);
         		break;
         		
         		case "getPages":
@@ -1701,14 +2327,16 @@ function ajaxCall(action, data  )
         		  break;
         		
 	        	case "getUserProfile":	        	       
+	        	  removeStorage("social_strategy");
 	        	  removeStorage("token");
 	        	  $('.show_if_login').hide();
 	        	  $(".show_if_notlogin").show();	        	  
-	        	  $(".show_if_has_pts").hide();
+	        	  $(".show_if_has_pts").hide();	        	  
+	        	  resetToPage('page_home.html','none');
 	        	break;
 	        	
 	        	case "getCreditCards":
-	        	  $(".cc_list").html( ''  );
+	        	  destroyList('ons_creditcard_list');
 	        	break;
 	        	
 	        	case "getOrders":	        	
@@ -1746,6 +2374,9 @@ function ajaxCall(action, data  )
 	        	case "loadItemByCategory":
 	        	case "loadBooking":	        	
 	        	  showToast(data.msg);
+	        	  if(action=="loadItemByCategory"){
+	        	  	 destroyList("infinite_item");
+	        	  }
 	        	break;
 	        	
 	        	case "getAddressBookDropDown":
@@ -1784,11 +2415,33 @@ function ajaxCall(action, data  )
 	        	   showToast( data.msg );
 	        	break;
 	        	
+	        	case "getTrackOrderData":	        		        	  
+	        	  $(".map_canvas").html( templateError(t("Task not found"),data.msg) );
+	        	break;
+	        	
+	        	case "GetTask":
+	        	  $(".frm_rate_task").html( templateError(t("Task not found"),data.msg) );
+	        	  $("#rate_button").attr("disabled",true);
+	        	break;
+	        	
+	        	case "getMerchantInfo":
+	        	  $(".info_wrap").html( templateError(data.details.title,data.details.sub_title) );
+	        	  $(".info_wrap2").html('');
+	        	break;
+	        	
+	        	case "AddFavorite":
+	        	  fillFavorite('.favorite_button',false);
+	        	break;
+	        	
+	        	case "RemoveFavorite":        	
+	        	  fillFavorite('.favorite_button',false);
+	        	break;	        		        	
+	        	
 	        	default: 
 	        	  if(!empty(data.msg)){
-	        	  	showAlert(data.msg);
+	        	  	showToast(data.msg);
 	        	  } else {
-	        	  	showAlert("Undefined error");
+	        	  	showToast("Undefined error");
 	        	  }	        	  
 	        	break;
         	}
@@ -1851,36 +2504,44 @@ var itemDetails = function(item_id, cat_id , row)
 
 var infiniteItem = function(done)
 {
+	
+	dump("infiniteItem");
+	
+    infinite_scroll_done = $("#page_item .infinite_scroll_done").val();
+    infinite_scroll_done = parseInt(infinite_scroll_done);
+    if(infinite_scroll_done>0){
+    	dump("finish");
+    	done();
+    	return;
+    }
+	
 	var data='';
-    var ajax_uri = ajax_url+"/loadItemByCategory";
-    data+="merchant_keys=" + krms_config.MerchantKeys;
+    var ajax_uri = ajax_url+"/loadItemByCategory";    
     data+="&cat_id=" + $(".cat_id").val();	
-    data+="&page=" + paginate_count;	
-    data+="&device_id=" + device_id;
-    
-    data+="&lang="+ getLangCode();
-    
+    data+="&page=" + paginate_count;	    
+    data+=requestParams();
+        
     dump(ajax_uri + "?"+ data);	
     
      var ajax_request = $.ajax({
 	  url: ajax_uri,
 	  method: "GET",
 	  data: data ,
-	  dataType: "jsonp",
-	  timeout: 20000,
+	  dataType: "json",
+	  timeout: ajax_timeout,
 	  crossDomain: true,
 	  beforeSend: function( xhr ) {           
          if(ajax_request != null) {	
          	dump("request aborted");     
          	ajax_request.abort();
             clearTimeout(timer);
-            $(".loader_item").hide();
+            $(".loader_item").html('');
          } else {         	
-         	$(".loader_item").show();
+         	$(".loader_item").html(icon_loader);
          	timer = setTimeout(function() {				
 				ajax_request.abort();
 				showToast( t('Request taking lot of time. Please try again') );
-	        }, 20000); 
+	        }, ajax_timeout); 
          }
       }
     });
@@ -1889,17 +2550,19 @@ var infiniteItem = function(done)
      	paginate_count++;
         dump("done ajax");
         dump(data);      
-        if (data.code==1){
-           displayItem(data.details.data);
-	       paginate_count++;
+        if (data.code==1){           
+           displayItem(data.details.data);	       
            done();
-        }        
+        } else {  
+           $("#page_item .infinite_scroll_done").val(1);         
+           done();
+        }    
     });
     
      /*ALWAYS*/
     ajax_request.always(function() {
         dump("ajax always");
-        $(".loader_item").hide();
+        $(".loader_item").html('');
         ajax_request=null;  
         clearTimeout(timer);
     });
@@ -1957,7 +2620,7 @@ var showToast = function(data) {
   }	
   
   toast_handler  = ons.notification.toast(data, {
-    timeout: 2000
+    timeout: 2500
   });
    
 };
@@ -1967,6 +2630,7 @@ var showAlert = function(data) {
   if (empty(data)){
   	  data='';
   }
+  ons.platform.select('ios'); 
   ons.notification.alert({
   	  message: t(data) ,
       title: krms_config.DialogDefaultTitle
@@ -2133,22 +2797,14 @@ var addToCart = function(){
 	/*alert('ok');
 	return;	*/
 	
-	var ajax_uri = ajax_url+"/addToCart/?merchant_keys=" + krms_config.MerchantKeys + "&device_id="+ device_id +"&json=1&device_platform="+device_platform + "&lang="+ getLangCode();
-	/*var ajax_cart = $.post(ajax_uri, params , function(data){
-		dump(data);
-		if ( data.code==1){
-			showToast(data.msg);
-		} else {
-			showAlert(data.msg);
-		}
-	}, "jsonp")*/
+	ajax_uri = ajax_url+"/addToCart/?"+ requestParams();
 		
 	var ajax_cart = $.ajax({
 	  type: "POST",
 	  url: ajax_uri,
 	  data: params,
 	  dataType: "json",
-	  timeout: 20000,
+	  timeout: ajax_timeout,
 	  crossDomain: true,
 	   beforeSend: function( xhr ) {
 	   	  clearTimeout(timer);
@@ -2165,7 +2821,7 @@ var addToCart = function(){
          		}
          		showLoader(false);
 				showToast( t('Request taking lot of time. Please try again') );
-	        }, 20000); 
+	        }, ajax_timeout); 
          }
          
 	   }
@@ -2203,20 +2859,24 @@ var addToCart = function(){
 };
 
 var getCartCount = function(){
-	
-	var ajax_uri = ajax_url+"/getCartCount/?merchant_keys=" + krms_config.MerchantKeys + "&device_id="+ device_id;	
+		
+	var ajax_uri = ajax_url+"/getCartCount/?"+ requestParams();
 	params ='';
 	
 	var ajax_cart_count = $.post(ajax_uri, params , function(data){
 		dump(data);		
+		
+		$(".basket_count").html( data.details.basket_count);
+		$(".basket_total").html( data.details.basket_total);
+		
 		if (data.code==1){
 			$(".cart_count").html(data.details.count);
-			$(".tabbar__badge").html(data.details.count);
+			$(".tabbar__badge").html(data.details.count);			
 		} else {			
 			$(".cart_count").html('');
 			$(".tabbar__badge").html('');
 		}
-	}, "jsonp")
+	}, "json")
 	
 	ajax_cart_count.done(function( data ) {		
 	});	
@@ -2287,11 +2947,11 @@ function prettyPrice( price )
     /*alert(decimal_place);
     alert(decimal_separator);*/
     
-	dump("decimal_place=>"+decimal_place);	
+	/*dump("decimal_place=>"+decimal_place);	
 	dump("currency_symbol=>"+currency_symbol);
 	dump("thousand_separator=>"+thousand_separator);
 	dump("decimal_separator=>"+decimal_separator);
-	dump("currency_position=>"+currency_position);
+	dump("currency_position=>"+currency_position);*/
 		
 	price = number_format(price, decimal_place, decimal_separator ,  thousand_separator ) ;
 	spacer ="";
@@ -2407,6 +3067,7 @@ var setFieldValue = function(class_name, value , label ){
 		  dialog.hide();
 		  $(".delivery_time_label").html('');
 		  $(".delivery_time").val('');
+		  removeStorage("delivery_time_set");
 		break;
 		
 		case "delivery_time":
@@ -2418,6 +3079,7 @@ var setFieldValue = function(class_name, value , label ){
 		  var delivery_asap = document.getElementById('delivery_asap');
 		  if(!empty(delivery_asap)){
 		     delivery_asap.checked = false;
+		     removeStorage("is_asap");
 		  }
 		  
 		break;
@@ -2442,32 +3104,17 @@ var ajaxCall2 = function(action, data ){
 	
 	var ajax_uri = ajax_url+"/"+action;
 	
-	data+="&merchant_keys=" + krms_config.MerchantKeys;	
-	data+="&device_id=" + device_id;
-	data+="&device_platform=" + device_platform;
-	
-	token = getStorage("token");
-	if (!empty(token)){
-		data+="&token=" + token;
-	}
-	
-	transaction_type = $(".transaction_type").val();
-	if(!empty(transaction_type)){
-		data+="&transaction_type=" + transaction_type;
-	}
-	
-	data+="&lang="+ getLangCode();
-	
+	data+=requestParams();
+						
 	dump("ajaxCall2 METHOD=>" + action );
-	dump(ajax_uri + "?"+ data);	
-	
+	//dump(ajax_uri + "?"+ data);		
 	
 	ajax_request2 = $.ajax({
 	  url: ajax_uri,
 	  method: "GET",
 	  data: data ,
-	  dataType: "jsonp",
-	  timeout: 20000,
+	  dataType: "json",
+	  timeout: ajax_timeout,
 	  crossDomain: true,
 	  beforeSend: function( xhr ) {
          dump("before send ajax");        
@@ -2489,7 +3136,7 @@ var ajaxCall2 = function(action, data ){
          		}
          		showLoader(false);
 				showToast( t('Request taking lot of time. Please try again') );
-	        }, 20000); 
+	        }, ajax_timeout); 
          }
       }
     });
@@ -2531,18 +3178,19 @@ var ajaxCall2 = function(action, data ){
 	        	  	$('.bottom_toolbar_checkout ons-button').attr("disabled",false);
 	        	  }
 	        	  
+	        	  enabledAsap();
 	        	  verifyCustomerToken();
 	        	  
 	        	break;
 	        	
-	        	case "getCreditCards":
-	        	  tpl = ccLIst(data.details.data);
-	        	  $(".cc_list").html( tpl  );
+	        	case "getCreditCards":	        	  
+	        	  destroyList('ons_creditcard_list');
+	        	  ccLIst(data.details.data,'ons_creditcard_list');	        	 
 	        	break;
 	        	
-	        	case "getAddressBookList":
-	        	  tpl = addressList(data.details.data);
-	        	  $(".address_list_wrap").html( tpl  );
+	        	case "getAddressBookList":	        	  
+	        	    destroyList('ons_addressbook_list');
+	        	    addressList(data.details.data,'ons_addressbook_list')
 	        	  break;
 	        	  
 	        	case "searchByCategory":
@@ -2555,14 +3203,36 @@ var ajaxCall2 = function(action, data ){
 	        	  ItemListSmall( data.details.list , 'search_by_item_result' );
 	        	break;
 	        	
+	        	case "getAllCategory":
+	        	  setStorage("singleapp_merchant_category", JSON.stringify(data.details.data) );  
+	        	break;
+	        	
         	}
+        	
+        } else if ( data.code==3){
+        	// token not valid
+        	 showToast(data.msg);
         } else if ( data.code==4){
         	
         	switch (action){
         		case "loadCart":
         		$(".no_order_wrap").hide();
         		$(".bottom_toolbar_checkout").hide();
-        		showAlert(data.msg);
+        		$(".page_cart_loader").html( templateError(data.msg, t("sorry we don't accept any order for today") ) );
+        		break;
+        	}
+        	
+        } else if ( data.code==6){	
+        	
+        	 switch (action){
+        		case "getAddressBookList":
+        		  destroyList('ons_addressbook_list');
+        		  $(".addressbook_list_loader").html( templateError(data.details.title,data.details.sub_title) );
+        		break;
+        		
+        		case "getCreditCards":
+        		  destroyList('ons_creditcard_list');
+        		  $(".creditcard_list_loader").html( templateError(data.details.title,data.details.sub_title) );
         		break;
         	}
         	
@@ -2570,20 +3240,28 @@ var ajaxCall2 = function(action, data ){
         	/*FAILED RESPONSE*/
         	switch (action)
         	{
-        		case "loadCart":	        	  
+        		case "loadCart":	        
+        		  
         		  $(".no_order_wrap").show();
 	        	  $(".cart_details").html( '' ) ;
 	        	  $(".cart_total").html('');
 	        	  $(".bottom_toolbar_checkout").hide();	        	  
+	        	  
+	        	  $(".basket_count").html( t("0 item") );
+				  $(".basket_total").html( prettyPrice(0) );
+				
+				  $(".cart_count").html('');
+			      $(".tabbar__badge").html('');
+	        	  
 	        	break;
 	        	
 	        	case "getAddressBookList":
-	        	  //showToast( data.msg );
-	        	  $(".address_list_wrap").html( ''  );
+	        	  showToast( data.msg );
+	        	  destroyList('ons_addressbook_list');
 	        	break;
 	        	
 	        	case "getCreditCards":
-	        	$(".cc_list").html( '' );
+	        	  destroyList('ons_creditcard_list');
 	        	break;
 	        	
 	        	case "searchByCategory":
@@ -2594,6 +3272,10 @@ var ajaxCall2 = function(action, data ){
 	        	case "searchByItem":
 	        	  showLoaderDiv(false,'search_by_item_result');
 	        	  $(".search_by_item_result").html( data.msg );
+	        	break;
+	        	
+	        	case "getAllCategory":
+	        	  removeStorage("singleapp_merchant_category");
 	        	break;
 	        	
         	}
@@ -2682,37 +3364,46 @@ var checkout = function(){
 		break;
 	}
 	
+	settings = AppSettings();	
+	
 	if(!isLogin()){				
 		/*not login*/
 		if (transaction_type=="dinein"){
-			if(settings = AppSettings()){
+			if(settings){
 				if(settings.order_verification=="2"){
 					setStorage("next_step",'order_sms_page');
 					setStorage("next_forms",'order_sms_page.html');
 					showPage("dinein_forms.html");
 				}
 			}
-			setStorage("next_forms",'signup.html');
+			//setStorage("next_forms",'signup.html');
+			setStorage("next_forms",'login.html');
 			showPage("dinein_forms.html");
+			
+		} else if ( transaction_type=="pickup" ) {				
+			if(settings){
+				if(settings.order_verification=="2"){
+					setStorage("next_step",'order_sms_page');
+					setStorage("next_forms",'order_sms_page.html');
+					showPage("pickup_forms.html");
+				}
+			}			
+			setStorage("next_forms",'login.html');
+			showPage("pickup_forms.html");
 		} else {
-			
-			if (settings.enabled_map_selection_delivery==1 && transaction_type=="delivery"){
-			   showPage('map_delivery.html');
-			   return;
-			}
-			
+						
 			setStorage("next_step",'payment_option');
-			if(settings = AppSettings()){
+			if(settings){
 				if(settings.order_verification=="2"){					
 					setStorage("next_step",'order_sms_page');
 				}
 			}
-			showPage('signup.html');
+			showPage('login.html');
 		}
 	} else {
 		/*already login*/
 		if (transaction_type=="dinein"){
-			if(settings = AppSettings()){
+			if(settings){
 				if(settings.order_verification=="2"){					
 					setStorage("next_forms",'order_sms_page.html');
 					showPage("dinein_forms.html");
@@ -2721,22 +3412,25 @@ var checkout = function(){
 			}
 			setStorage("next_forms",'payment_option.html');
 			showPage("dinein_forms.html");
+			
+		} else if ( transaction_type=="pickup" ) {			
+			if(settings){
+				if(settings.order_verification=="2"){					
+					setStorage("next_forms",'order_sms_page.html');
+					showPage("pickup_forms.html");
+					return ;
+				}
+			}
+			setStorage("next_forms",'payment_option.html');
+			showPage("pickup_forms.html");								
 		} else {					
-			if(settings = AppSettings()){
+			if(settings){
 				if(settings.order_verification=="2"){					
 					setStorage("next_forms",'payment_option.html');					
 					showPage("order_sms_page.html");					
-					if (settings.enabled_map_selection_delivery==1 && transaction_type=="delivery"){
-						setStorage("next_forms",'map_delivery.html');
-					}					
 					return ;
 				}
-				
-				if (settings.enabled_map_selection_delivery==1 && transaction_type=="delivery"){					
-					showPage('map_delivery.html');
-					setStorage("next_forms",'payment_option.html');
-					return;					
-				}
+								
 			}
 			showPage('payment_option.html');
 		}
@@ -2751,10 +3445,28 @@ var isLogin = function(){
 	return false;
 };
 
-var showPage = function(page_id){
+/*var showPage = function(page_id){
      onsenNavigator.pushPage(page_id,{
   	   animation : "slide",  	
      });  
+};*/
+
+showPage = function(page_id, animation, data){
+	
+   if(empty(page_id)){
+   	  return;
+   }
+   	
+   if(empty(animation)){
+   	  animation='slide';
+   }
+   if(empty(data)){
+   	  data={};
+   }
+   onsenNavigator.pushPage(page_id,{
+  	   animation : animation , 
+  	   data : data 	
+   });  
 };
 
 var showPageNormal = function(page_id){
@@ -2803,29 +3515,24 @@ var printDeliveryAddress = function(address){
 var verifyCustomerToken = function(){
 		
 	var token = getStorage("token");
-	
-	//alert("verify token =>" + token);
-	
-	/*if(empty(token)){
-		dump("token is empty");
-		return;
-	}*/
-	
-	var ajax_uri = ajax_url+"/verifyCustomerToken/?merchant_keys=" + krms_config.MerchantKeys + "&device_id="+ device_id +"&token=" + token ;	
-	
+				
+	var ajax_uri = ajax_url+"/verifyCustomerToken/?" + requestParams();
 	dump(ajax_uri);
 	
 	showLoader(true);
 	
 	var ajax_token = $.post(ajax_uri, params , function(data){			
-	}, "jsonp")
+	}, "json")
 	
 	ajax_token.done(function( data ) {				 	
 		dump(data);
 		if (data.code==2){			
 			removeStorage("token");
-			removeStorage("customer_number");
-		} 
+			//removeStorage("customer_number");
+			removeStorage("customer_number1");
+		} else if(data.code==1){			
+			setStorage("customer_number1",data.details.data.contact_phone);
+		}
 	});	
 	
 	ajax_token.always(function( data ) {
@@ -2851,16 +3558,14 @@ var initPayment = function(){
 	}
 		
 	switch (payment_provider){
-		case "cod":
-		  /*if (transaction_type=="delivery"){
-		     showPage("cod_forms.html");
-		  } else if ( transaction_type=="pickup" ) {
-		  	  payNow();
-		  } else if ( transaction_type=="dinein" ) {
-		  	showPage("dinein_forms.html");
-		  }*/
+		case "cod":		  
 		  if (transaction_type=="delivery"){
-		  	 showPage("cod_forms.html");
+		  	 settings = AppSettings();		  	 
+		  	 if(settings.cod_change_required==2){
+		  	    showPage("cod_forms.html");
+		  	 } else {
+		  	 	payNow();
+		  	 }
 		  } else {
 		  	 payNow();
 		  }
@@ -2942,6 +3647,10 @@ var payNow = function(payment_params){
 		   params+= "&"+$( ".frm_dinein").serialize();
 		break;
 		
+		case "pickup":
+		  params+= "&"+$( ".frm_pickup").serialize();
+		break;
+		
 		case "delivery":
 		  var delivery_asap = document.getElementById('delivery_asap');
 		  if(!empty(delivery_asap)){
@@ -2955,34 +3664,17 @@ var payNow = function(payment_params){
 };
 
 var backToHome = function(action){	
-	
-	   
-	/*setStorage("category_is_delayed",1);
-	page_category=1;
-	removeStorage('infinite_category');
-	
-	if(empty(action)){		
-	   loadPage('splitter.html');
-	} else {			
-		onsenNavigator.resetToPage('page_home.html',{
-		  	animation : "lift",	
-		  	callback : function(){
-		  	
-		  	}
-		});  
-	}*/
-		
-	
+		   		
 	page_category=1;
 	setStorage("category_is_delayed",1);			
 	onsenNavigator.resetToPage('page_home.html',{
-	  	animation : "lift",	
+	  	animation : "none",	
 	  	callback : function(){
 	  		
-	  		tabbar_bottom = document.getElementById('tabbar_bottom');
+	  		/*tabbar_bottom = document.getElementById('tabbar_bottom');
 			tabbar_bottom.setActiveTab(0,{
 				animation:'none'
-			});						
+			});*/
 	  		
 	  	}
 	});  	
@@ -3019,16 +3711,32 @@ var receivePush = function(){
 
 var logout = function(){
 	
+	ons.platform.select('ios'); 
 	ons.notification.confirm( t("Are you sure?") ,{
 		title: dialog_title,
-		buttonLabels : [ t("Cancel") , t("Ok") ]
+		buttonLabels : [  t("Ok"), t("Cancel") ]
 	}).then(function(input) {
-		if (input==1){			
-			fbLogout();			
-			removeStorage("token");
-			pushUnregister();
+		if (input==0){			
+			social_strategy = getStorage("social_strategy");
+			dump("social_strategy=>"+social_strategy);
+			switch(social_strategy){
+				case "fb_mobile":
+				  fbLogout();
+				break;
+				
+				case "google_mobile":
+				  LogoutGoogle();
+				break;
+				
+				default:
+				break;
+			}						
+			processDynamicAjax("logout",'',"temp",'' ,1);							
+			removeStorage("token");			
+			removeStorage("social_strategy");
 	        backToHome(1);
-		}
+	        
+		} /*end if*/
 	});
 		
 };
@@ -3073,10 +3781,18 @@ var login = function(){
 var setMobileNuber = function(){
 	$(".frm_setphone").validate({
    	   submitHandler: function(form) {
-   	      prefix = $(".prefix").val();
-   	      phone = $(".mobile_number").val();
-   	      complete_phone = prefix+phone;   	      
-   	      popPage();
+   	   	
+   	   	  complete_phone='';
+   	   	  settings = AppSettings();
+   	   	  if(settings.remove_phone_prefix==1){
+   	   	  	  complete_phone = $(".mobile_number").val();
+   	   	  } else {
+	   	      prefix = $(".prefix").val();
+	   	      phone = $(".mobile_number").val();
+	   	      complete_phone = prefix+phone;   	      
+   	   	  }
+   	      popPage();   	      
+   	      setStorage("customer_number", complete_phone );   	      
    	      $(".contact_phone").val( complete_phone );
 	   }
    	});
@@ -3085,7 +3801,7 @@ var setMobileNuber = function(){
 
 
 var cardsAction = function(id , sheet_action){
-   
+   	
    var action='';
    var page_id='';
    
@@ -3096,8 +3812,13 @@ var cardsAction = function(id , sheet_action){
    	 break;
    	 
    	 case "address":
-   	   action ='deleteAddressBook';
-   	   page_id = 'addressbook.html';
+   	   if(isLocation()){
+   	   	   action ='deleteAddressBook';
+	   	   page_id = 'addressbook_location.html';
+   	   } else {
+	   	   action ='deleteAddressBook';
+	   	   page_id = 'addressbook.html';
+   	   }
    	 break;
    }
    
@@ -3107,11 +3828,11 @@ var cardsAction = function(id , sheet_action){
     buttons: [      
       {
         label: t('Edit') ,
-        icon: 'md-edit'
+        //icon: 'md-edit'
       },
       {
         label: t('Delete'),
-        icon: 'md-delete'
+        //icon: 'md-delete'
       }
     ]
   }).then(function (index) { 
@@ -3125,11 +3846,12 @@ var cardsAction = function(id , sheet_action){
 		  });    
   	  	
   	  } else if (index==1) {
+  	  	   ons.platform.select('ios');	
   	  	   ons.notification.confirm( t("Are you sure?") ,{
 				title: dialog_title,
-				buttonLabels : [ t("Cancel"), t("Ok") ]
+				buttonLabels : [  t("Ok"), t("Cancel") ]
 			}).then(function(input) {
-				if (input==1){
+				if (input==0){
 					ajaxCall( action , "id="+ id );
 				}
 			});
@@ -3225,16 +3947,10 @@ var infiniteOrders = function(done){
 	
 	dump('infiniteOrders');
 	var data='';
-    var ajax_uri = ajax_url+"/getOrders";
-    data+="merchant_keys=" + krms_config.MerchantKeys;    
-    data+="&page=" + paginate_count;	
-    data+="&device_id=" + device_id;
-    
-    token = getStorage("token");
-	if (!empty(token)){
-		data+="&token=" + token;
-	}
-	
+    var ajax_uri = ajax_url+"/getOrders";    
+    data+="&page=" + paginate_count;	    
+    data+=requestParams();
+        
 	dump("paginate_result=>"+ paginate_result);
 	if(paginate_result==1){		
 		done();
@@ -3249,8 +3965,8 @@ var infiniteOrders = function(done){
 	  url: ajax_uri,
 	  method: "GET",
 	  data: data ,
-	  dataType: "jsonp",
-	  timeout: 20000,
+	  dataType: "json",
+	  timeout: ajax_timeout,
 	  crossDomain: true,
 	  beforeSend: function( xhr ) {           
          if(ajax_request_orders != null) {	
@@ -3262,7 +3978,7 @@ var infiniteOrders = function(done){
          	timer = setTimeout(function() {				
 				ajax_request_orders.abort();
 				showToast( t('Request taking lot of time. Please try again') );
-	        }, 20000); 
+	        }, ajax_timeout); 
          }
       }
     });
@@ -3398,11 +4114,10 @@ infiniteReview = function(done){
 	dump("infiniteReview");
 
 	var data='';
-    var ajax_uri = ajax_url+"/loadReviews";
-    data+="merchant_keys=" + krms_config.MerchantKeys;    
-    data+="&page=" + paginate_count;	
-    data+="&device_id=" + device_id;
+    var ajax_uri = ajax_url+"/loadReviews";    
+    data+="&page=" + paginate_count;	    
     data+="&limit=10";
+    data+=requestParams();
     
     token = getStorage("token");
 	if (!empty(token)){
@@ -3423,8 +4138,8 @@ infiniteReview = function(done){
 	  url: ajax_uri,
 	  method: "GET",
 	  data: data ,
-	  dataType: "jsonp",
-	  timeout: 20000,
+	  dataType: "json",
+	  timeout: ajax_timeout,
 	  crossDomain: true,
 	  beforeSend: function( xhr ) {           
          if(ajax_request_orders != null) {	
@@ -3436,7 +4151,7 @@ infiniteReview = function(done){
          	timer = setTimeout(function() {				
 				ajax_request_orders.abort();
 				showToast( t('Request taking lot of time. Please try again') );
-	        }, 20000); 
+	        }, ajax_timeout); 
          }
       }
     });
@@ -3524,17 +4239,9 @@ var infiniteBooking = function(done){
 	
 	dump('infiniteBooking');
 	var data='';
-    var ajax_uri = ajax_url+"/loadBooking";
-    data+="merchant_keys=" + krms_config.MerchantKeys;    
-    data+="&page=" + paginate_count;	
-    data+="&device_id=" + device_id;
-    
-    token = getStorage("token");
-	if (!empty(token)){
-		data+="&token=" + token;
-	}
-	
-	data+="&lang="+ getLangCode();
+    var ajax_uri = ajax_url+"/loadBooking";    
+    data+="&page=" + paginate_count;	    
+    data+=requestParams();    
 	
 	dump("paginate_result=>"+ paginate_result);
 	if(paginate_result==1){		
@@ -3549,8 +4256,8 @@ var infiniteBooking = function(done){
 	  url: ajax_uri,
 	  method: "GET",
 	  data: data ,
-	  dataType: "jsonp",
-	  timeout: 20000,
+	  dataType: "json",
+	  timeout: ajax_timeout,
 	  crossDomain: true,
 	  beforeSend: function( xhr ) {           
          if(ajax_request_orders != null) {	
@@ -3562,7 +4269,7 @@ var infiniteBooking = function(done){
          	timer = setTimeout(function() {				
 				ajax_request_orders.abort();
 				showToast( t('Request taking lot of time. Please try again') );
-	        }, 20000); 
+	        }, ajax_timeout); 
          }
       }
     });
@@ -3615,24 +4322,45 @@ vDinein = function(){
 	
 };
 
+vPickup = function(){	
+	$(".frm_pickup").validate({
+   	    submitHandler: function(form) {   	   	    	
+   	    	setStorage("customer_number", $(".contact_phone").val() );
+   	    	next_forms = getStorage("next_forms");
+   	    	if(empty(next_forms)){
+   	    		next_forms = "payment_option.html";
+   	    	}
+   	    	showPage(next_forms);
+		}
+   	});
+	$(".frm_pickup").submit();
+	
+};
 
 initAddress = function(){
 	has_addressbook = $(".has_addressbook").val();
 	if(has_addressbook==1){
 		showPage('address_form_select.html');
 	} else {
-		showPage('address_form.html');
+		if(isLocation()){
+		   showPage('address_form_location.html');
+		} else {
+		   showPage('address_form.html');
+		}
 	}
 };
 
 setAddressBook = function(){
 	$(".frm_address_form_select").validate({
-   	    submitHandler: function(form) {   	
-   	    	
-   	    	setStorage("customer_number", $(".contact_phone").val() );
-   	    	
+   	    submitHandler: function(form) {   	   	    	
+   	    	setStorage("customer_number", $(".contact_phone").val() );   	    	
    	    	var params = $( ".frm_address_form_select").serialize();
-   	    	ajaxCall('setAddressBook', params ); 
+   	    	
+   	    	if(isLocation()){
+   	    		ajaxCall('setAddressBookLocation', params ); 
+   	    	} else {
+   	    		ajaxCall('setAddressBook', params ); 
+   	    	}   	    	
 		}
    	});
 	$(".frm_address_form_select").submit();
@@ -3974,7 +4702,7 @@ var displayMap = function(div, data , map_type){
 		  lat: data.details.data.latitude,
 		  lng: data.details.data.lontitude,
 		  disableDefaultUI: true,
-		  styles: [ {stylers: [ { "saturation":-100 }, { "lightness": 0 }, { "gamma": 1 } ]}],				  		  
+		  //styles: [ {stylers: [ { "saturation":-100 }, { "lightness": 0 }, { "gamma": 1 } ]}],				  		  
 		};
 		
 		if(map_type=="map_select"){			
@@ -4198,6 +4926,18 @@ setMapCenter = function(){
 };
 
 fbInit = function(){
+		
+	if ( krms_config.debug ){
+		params = "email_address=fb_test@yahoo.com" ;
+		params+= "&first_name=fb_name";
+		params+= "&last_name=fb_lastname";
+		params+= "&userid=12334567890";
+		params+="&next_step=" +  getStorage("next_step");
+		params+="&social_strategy=fb_mobile";
+		ajaxCall('SocialLogin', params );
+		return false;
+	}
+	
 	try {
 		facebookConnectPlugin.getLoginStatus(function(status){
 			//alert(JSON.stringify(status)); 
@@ -4231,10 +4971,11 @@ fbRegister = function(userID){
 		params = "email_address="+ data.email ;
 		params+= "&first_name="+ data.first_name ;
 		params+= "&last_name="+ data.last_name ;
-		params+= "&fb_id="+ data.id ;
+		params+= "&userid="+ data.id ;
 		params+="&next_step=" +  getStorage("next_step");		
+		params+="&social_strategy=fb_mobile";
 				
-		ajaxCall('fbRegister', params );
+		ajaxCall('SocialLogin', params );
 		
 	}, function(error){
 		//showToast("an error has occured") + " "+ alert(JSON.stringify(error));
@@ -4287,16 +5028,7 @@ getAppSettings = function(){
 	var modal = document.querySelector('#settings_loader');
 	var data='';
     var ajax_uri = ajax_url+"/getAppSettings";
-    data+="merchant_keys=" + krms_config.MerchantKeys;        
-    data+="&device_id=" + device_id;
-    data+="&device_platform=" + device_platform;
-    
-    token = getStorage("token");
-	if (!empty(token)){
-		data+="&token=" + token;
-	}
-	
-	data+="&lang="+ getLangCode();
+    data+=requestParams();    
 	
 	dump(ajax_uri + "?"+ data);	
 	 
@@ -4304,8 +5036,8 @@ getAppSettings = function(){
 	  url: ajax_uri,
 	  method: "GET",
 	  data: data ,
-	  dataType: "jsonp",
-	  timeout: 20000,
+	  dataType: "json",
+	  timeout: ajax_timeout,
 	  crossDomain: true,
 	  beforeSend: function( xhr ) {           
          if(ajax_settings != null) {	
@@ -4318,26 +5050,57 @@ getAppSettings = function(){
          		$("#settings_error").show();
 				ajax_settings.abort();
 				showToast( t('Request taking lot of time. Please try again') );
-	        }, 20000);
+	        }, ajax_timeout);
          }
       }
     });
     
      ajax_settings.done(function( data ) {
-     	dump(data);     	
+     	dump(data);     
+     	     	
      	if(data.code==1){
      	   setStorage("app_settings", JSON.stringify(data.details) );
-     	   dict = data.details.dict;     	   
+     	   dict = data.details.dict;     
+     	        	   
+     	   if(data.details.tracking_interval_timeout>0){     	   	  
+     	   	  interval_timeout = parseInt(data.details.tracking_interval_timeout) + 0 ;
+     	   }
+     	   
+     	   if(data.details.valid_token!=1){
+     	      removeStorage("token");
+     	   } 
+     	   
+     	   if(data.details.map_provider.provider=="mapbox"){
+     	   	  $('head').append('<link rel="stylesheet" href="lib/leaflet/leaflet.css" type="text/css" />');
+     	   	  $('head').append('<link rel="stylesheet" href="lib/leaflet/plugin/routing/leaflet-routing-machine.css" type="text/css" />');
+     	   	  $('head').append('<link rel="stylesheet" href="lib/leaflet/plugin/geocoder/mapbox-gl-geocoder.css" type="text/css" />');
+     	   	  
+     	   	  $('head').append('<script src="lib/leaflet/leaflet.js"></script>');
+     	   	  $('head').append('<script src="lib/leaflet/plugin/routing/leaflet-routing-machine.min.js"></script>');
+     	   	  $('head').append('<script src="lib/leaflet/plugin/geocoder/mapbox-gl-geocoder.min.js"></script>');
+     	   }
+     	   
+     	   if( data.details.is_rtl==1){
+     	       $("body").addClass("RTL");
+     	   }
+     	   
+     	   if(data.details.home.startup_language==1){
+	     		current_lang = getStorage("lang");
+	     		if(empty(current_lang)){
+	     			resetToPage('startup_language.html','none');
+	     			return;
+	     		}
+	       }
+	     	     	
+	       continueToApp();
+     	   
+     	} else if( data.code=11){
+     		showToast( data.msg );     		
+     		return;
      	} else {
      	   setStorage("app_settings", '');
      	}
-     	
-     	setTimeout(function(){
-	     	onsenNavigator.resetToPage('page_home.html',{
-			  animation : "none",		  	
-			});	
-		}, 1000);
-     	
+     	     	     	
      	ajax_settings=null;       	
      	clearTimeout(timer3);     	
      });
@@ -4469,16 +5232,7 @@ setLanguage = function(language_code){
 	}
 	
 	setStorage("lang",language_code);
-	translator.lang(language_code);			
-	/*var tab='';
-	      tab+='<ons-tabbar id="tabbar_bottom"  position="bottom">';
-	    tab+='<ons-tab page="splitter.html" label="'+ translator.get("Food") +'" icon="md-local-dining" ></ons-tab>';
-	    tab+='<ons-tab page="reviews.html" label="'+ translator.get("Reviews") +'" icon="md-star" ></ons-tab> ';
-	    tab+='<ons-tab page="orders.html" label="'+ translator.get("Orders") +'" icon="md-reorder" ></ons-tab>';
-	    tab+='<ons-tab page="profile_menu.html" label="'+ translator.get("You") +'" icon="fa-user" ></ons-tab>';
-	    tab+='<ons-tab label="'+ translator.get("Cart") +'" icon="md-shopping-cart" onclick="showCart()" class="tabb_cart" badge="" ></ons-tab>';
-	  tab+='</ons-tabbar>';		  
-	$(".home_tabbar").html(tab);*/
+	translator.lang(language_code);		
 };
 
 translatePage = function(){
@@ -4564,7 +5318,15 @@ dialogNoNet = function(data){
 getLocationAccuracy = function(){
 	if(settings = AppSettings()){
 		if(!empty(settings.singleapp_location_accuracy)){			
-			return settings.singleapp_location_accuracy;
+			switch(settings.singleapp_location_accuracy){
+				case "REQUEST_PRIORITY_LOW_POWER":
+				  return false;
+				break;
+				
+				default:
+				  return true;
+				break;				
+			}
 		}
 	}
 	return false;
@@ -4610,17 +5372,9 @@ var infiniteNotification = function(done){
 	
 	dump('infiniteNotification');
 	var data='';
-    var ajax_uri = ajax_url+"/loadNotification";
-    data+="merchant_keys=" + krms_config.MerchantKeys;    
-    data+="&page=" + paginate_count;	
-    data+="&device_id=" + device_id;
-    
-    token = getStorage("token");
-	if (!empty(token)){
-		data+="&token=" + token;
-	}
-	
-	data+="&lang="+ getLangCode();
+    var ajax_uri = ajax_url+"/loadNotification";    
+    data+="&page=" + paginate_count;	    
+    data+=requestParams();
 	
 	dump("paginate_result=>"+ paginate_result);
 	if(paginate_result==1){		
@@ -4635,8 +5389,8 @@ var infiniteNotification = function(done){
 	  url: ajax_uri,
 	  method: "GET",
 	  data: data ,
-	  dataType: "jsonp",
-	  timeout: 20000,
+	  dataType: "json",
+	  timeout: ajax_timeout,
 	  crossDomain: true,
 	  beforeSend: function( xhr ) {           
          if(ajax_request_orders != null) {	
@@ -4648,7 +5402,7 @@ var infiniteNotification = function(done){
          	timer = setTimeout(function() {				
 				ajax_request_orders.abort();
 				showToast( t('Request taking lot of time. Please try again') );
-	        }, 20000); 
+	        }, ajax_timeout); 
          }
       }
     });
@@ -4782,88 +5536,59 @@ initImageLoaded = function(){
 };
 
 
-pushUnregister = function(){
-	
-	try {	
-		push_handle.unregister(function(){			
-			//alert('unregister ok');
-			setStorage("push_unregister",1);
-		},function(error) {   	   	   	   	   
-			//alert('unregister error');
-	    });		
-		
-	} catch(err) {
-       //alert(err.message);
-    } 
-};
-
 handlePushRegister = function(){
-	push_unregister = getStorage("push_unregister");
-	//alert("push_unregister =>" + push_unregister);
-	if(push_unregister==1 || push_unregister=="1"){
+	try {
 		
-		//alert('register again');		
-		removeStorage("push_unregister");
-				
-		try {	
-			
-			var old_device_id = device_id;
-			
-			push_handle = PushNotification.init({
+		PushNotification.createChannel(function(){
+	    	//alert('create channel succces');
+	    }, function(){
+	    	//alert('create channel failed');
+	    },{
+	    	 id: 'kmrs_singleapp',
+	         description: 'singleapp app channel',
+	         importance: 5,
+	         vibration: true,
+	         sound : 'beep'
+	      }
+	    );	    
+	    
+		push_handle = PushNotification.init({
 			android: {
 				sound : "true",
 				clearBadge : "true"
-				},
-			    browser: {
-			        pushServiceURL: 'http://push.api.phonegap.com/v1/push'
-			    },
-				ios: {
-					alert: "true",
-					badge: "true",
-					sound: "true",
-					clearBadge:"true"
-				},
-				windows: {}
-			});
-			
-			push_handle.on('registration', function(data) {   	   	   		   	   
-		   	   device_id  = data.registrationId;		   	   
-		   	   ajaxCall2('updateDeviceID','device_id='+device_id + "&old_device_id="+old_device_id);
-		    });
-			
-		    push_handle.on('notification', function(data){
-		    	//alert(JSON.stringify(data)); 
-		    	
-		    	if ( data.additionalData.foreground ){
-		    		playSound();
-		    	}
-		    	
-		    	handleNotification(data);
-		    	
-		    });
-		    
-		    PushNotification.createChannel(function(){
-		    	 //alert('create channel succces');
-		     }, function(){
-		    	//alert('create channel failed');
-		     },{
-		    	 id: 'kmrs_singleapp',
-		         description: 'singleapp app channel',
-		         importance: 5,
-		         vibration: true,
-		         sound : 'beep'
-		      }
-		     );
-		    
-		    push_handle.on('error', function(e) {     
-		    	alert(e.message);
-		    });	    	   
-				
-		} catch(err) {
-           alert(err.message);
-        } 
+			},
+		    browser: {
+		        pushServiceURL: 'http://push.api.phonegap.com/v1/push'
+		    },
+			ios: {
+				alert: "true",
+				badge: "true",
+				sound: "true",
+				clearBadge:"true"
+			},
+			windows: {}
+	    });
+	    
+	    push_handle.on('registration', function(data) {   	  		    	
+	    	device_id = data.registrationId;
+	    	setStorage("device_id", data.registrationId );		    	
+		});
 		
-	}
+		push_handle.on('notification', function(data){     
+	   	   //alert(JSON.stringify(data));   	
+		   if ( data.additionalData.foreground ){
+	    		playSound();
+	       } 	                       	  
+	       handleNotification(data);	       
+	    });
+	    	  
+	    push_handle.on('error', function(e) {      
+	     	 alert(e.message);
+		});
+		
+	} catch(err) {
+       alert(err.message);
+    } 
 };
 
 
@@ -4910,14 +5635,15 @@ getRoute2 = function(){
 
 /*VERSION 1.1*/
 
-setAsap = function(){
+setAsap = function(){	
 	var delivery_asap = document.getElementById('delivery_asap');
 	is_selected = delivery_asap.checked;	
     if (is_selected=="true" || is_selected == true){    	
     	$(".delivery_time").val('');
     	$(".delivery_time_label").html('');
+    	setStorage("is_asap",1);    	
     } else {
-    	
+    	removeStorage("is_asap");
     }
 };
 
@@ -5021,15 +5747,18 @@ payWebview = function(url){
 	}	
 };
 
-confirmClearCart = function(){
-  var dialog = document.getElementById('clear_cart_dialog');
-  if (dialog) {
-       dialog.show();
-  } else {
-      ons.createElement('clear_cart_dialog.html', { append: true }).then(function(dialog) {
-        dialog.show();
-      });
-  }  
+confirmClearCart = function(){  
+	  
+  ons.platform.select('ios');	
+  ons.notification.confirm( t("Are you sure you want to remove all items in your cart?") ,{
+		title: t("Clear cart?"),
+		buttonLabels : [  t("Ok"), t("Cancel") ]
+	}).then(function(input) {
+		if (input==0){			
+			clearCart();			
+		}
+	});
+  
 };
 
 hideDialog = function(id) {
@@ -5037,7 +5766,7 @@ hideDialog = function(id) {
 };
 
 clearCart = function(){
-	hideDialog('clear_cart_dialog'); 
+	//hideDialog('clear_cart_dialog'); 
 	ajaxCall("clearCart",'');
 };
 
@@ -5052,28 +5781,28 @@ setDeliveryLocation = function(){
 };
 
 FillBanner = function(){	
+	html='';
 	if(settings = AppSettings()){
 	   if(settings.singleapp_enabled_banner==1){
-	   	
-	   	   html='<div class="search_wrapper">'; 	  
-	   	  html+='<ons-row>';
-		    html+='<ons-col vertical-align="center" >';
-		      html+='<ons-search-input id="search" placeholder="Search for category" onclick="showPageNormal(\'search_category.html\');" ></ons-search-input>';
-		    html+='</ons-col>';
-		  html+='</ons-row>';
-		  html+='</div>';
-	   	
-	   	   html+='<div class="line-yellow"></div>';
+	   		   	  
 	       html+='<ons-carousel swipeable auto-scroll overscrollable id="k_carousel">';
 	   	
 	   	   $.each( settings.singleapp_banner  , function( key, val ) {
 	   	   	   html+='<ons-carousel-item style="background-image: url('+ "'" + val + "'" +')" no-repeat center center;">';
+	   	   	   
+	   	   	      html+='<div class="banner">';
+				  html +='<div class="is-loading large-loader">'; 
+				  html +='<div class="spinner"></div>';		
+				  html +='<img class="hide" src="'+val+'">';	      
+				  html +='</div>';   
+				  html +='</div>';   
+	   	   	   
                html+='</ons-carousel-item>';
 	   	   });
 	   	   
 	   	   html+='</ons-carousel>';	   	   
 	   	   
-	   	   html+='<div class="banner-paging">';
+	   	   html+='<div class="banner-paging is_rtl">';
 			 html+='<ul class="dots">';
 			   $.each( settings.singleapp_banner  , function( key, val ) {		
 			   	  selected='';	   	  
@@ -5086,29 +5815,27 @@ FillBanner = function(){
 		   html+='</div> ';
 	   	   
 	   	   $(".banner_wrap").html( html );
+	   	   	   	  
+	   	   setTimeout(function(){	    
+	   	   	  runHomeBanner();
+	       },400);
 	   	   
 	   } else {
-	   	  
-	   	  html='<div class="inner_wrap">'; 	  
-	   	  html+='<ons-row>';
-		    html+='<ons-col vertical-align="center" >';
-		      html+='<ons-search-input id="search" placeholder="Search for category" onclick="showPageNormal(\'search_category.html\');" ></ons-search-input>';
-		    html+='</ons-col>';
-		  html+='</ons-row>';
-		  html+='</div>';
-		  $(".search_wrapper").html( html );		
+	   	  	   		   	 
+	   	 $(".search_wrapper").html( '<div class="bottom_gap1"></div>' )
 		  
 	   }
 	}	
-
-	setTimeout(function(){ 
-	   $(".search-input ").removeClass("search-input--material");     
-    }, 100);		  
+	
 };
 
 setFocus = function(element){
-	document.getElementById( element )._input.focus();
+	setTimeout(function(){
+	   document.getElementById( element )._input.focus();
+	},200);
 }
+
+
 
 destroyList = function(element){
 	dump("destroyList");
@@ -5141,15 +5868,15 @@ LoginGoogle = function(){
 	
 	if ( krms_config.debug ){
 		
-		var params = "email=test@google.com";
+		var params = "email_address=test@google.com";
 		params+="&userid=123";
-		params+="&fullname=basti";
-		params+="&lastname=bach";
+		params+="&first_name=gfname";
+		params+="&last_name=glastname";
 		params+="&imageurl=";
-		params+="&next_step=" +  getStorage("next_step");
-		
-		ajaxCall('LoginGoogle', params );
-		
+		params+="&next_step=" +  getStorage("next_step");		
+		params+="&social_strategy=google_mobile";
+		ajaxCall('SocialLogin', params );
+				
 	} else {
 		
 		try {
@@ -5159,18 +5886,19 @@ LoginGoogle = function(){
 		    },
 		    function (obj) {
 		    	// SUCCESS
-		    	var params = "email=" + encodeURIComponent(obj.email);
+		    	var params = "email_address=" + encodeURIComponent(obj.email);
 				params+="&userid=" + encodeURIComponent(obj.userId);			
 				if(!empty(obj.givenName)){
-				    params+="&fullname="+ encodeURIComponent(obj.givenName);
+				    params+="&first_name="+ encodeURIComponent(obj.givenName);
 				} else {
-					params+="&fullname="+ encodeURIComponent(obj.displayName);
+					params+="&first_name="+ encodeURIComponent(obj.displayName);
 				}
-				params+="&lastname="+ encodeURIComponent(obj.familyName);
+				params+="&last_name="+ encodeURIComponent(obj.familyName);
 				params+="&imageurl="+ encodeURIComponent(obj.imageUrl);							
-				params+="&next_step=" +  getStorage("next_step");			
+				params+="&next_step=" +  getStorage("next_step");		
+				params+="&social_strategy=google_mobile";	
 								
-				ajaxCall("LoginGoogle", params );	    	
+				ajaxCall("SocialLogin", params );	    	
 		    },
 		    function (msg) {
 		    	// FAILED
@@ -5191,10 +5919,22 @@ LoginGoogle = function(){
 		    });
 		    
 	  } catch(err) {
-         alert(err.message);       
+         showAlert(err.message);       
       } 
 	}
 };
+
+LogoutGoogle = function(){
+	if ( !krms_config.debug ){
+		window.plugins.googleplus.logout(
+		    function (msg) {
+		    	// do nothing
+		    }
+		);
+	}
+};
+
+var test_loader;
 
 browseCamera = function(){
 	if ( krms_config.debug ){
@@ -5214,10 +5954,8 @@ browseCamera = function(){
 	       	  clearInterval(test_loader);
 	       	  dump("stop");
 	       	  $(".loading_wrap").hide();
-	       	  $(".btn_profile").attr("disabled",false);
-	       	  	       	 
-	       }
-	       
+	       	  $(".btn_profile").attr("disabled",false);	       	  	       	 
+	       }	       
 	    }, 1000);
 	} else {
 		
@@ -5256,6 +5994,7 @@ uploadPhoto = function(imageURI){
 		 params.token = getStorage("token") ;	 
 		 params.merchant_keys = krms_config.MerchantKeys;
 		 params.device_id = device_id;
+		 params.device_uiid = device_uiid;
 		 params.device_platform = device_platform;
 		 params.lang = urlencode(getLangCode());
 		 
@@ -5342,24 +6081,25 @@ getProfileSilent = function(){
 		  
 	if(isLogin()){
 		
-		  dump("==>getProfileSilent"); 
-		  var ajax_uri = ajax_url+"/getUserProfile/?merchant_keys=" + krms_config.MerchantKeys ;
-		  ajax_uri+= "&device_id="+ device_id +"&token=" + token  + "&device_platform="  + device_platform;
+		  dump("==>getProfileSilent"); 		  
+		  var ajax_uri = ajax_url+"/getUserProfile/?"+ requestParams();
 		  
 		  dump(ajax_uri);
 		  
 		  params='';
 		  		  
 		  ajax_profile = $.post(ajax_uri, params , function(data){			
-		  }, "jsonp")
+		  }, "json")
 		  
 		  ajax_profile.done(function( data ) {				 	
-			 dump(data);		
+			 dump(data);					 
 			 if(data.code==1){
 			 	 setStorage("profile_name", data.details.data.full_name);
-			 	 setStorage("profile_avatar", data.details.data.avatar);
+			 	 setStorage("profile_avatar", data.details.data.avatar);			 	 
+			 	 setStorage("social_strategy", data.details.data.social_strategy );
 			 } else {
 			 	 removeStorage("token");
+			 	 removeStorage("social_strategy");
 			 }
 		  });	
 		  
@@ -5394,33 +6134,39 @@ runTrackMap = function(){
 	 stopTrackMapInterval();	
 	
 	 dump("==>runTrackMap"); 
-	  var ajax_uri = ajax_url+"/trackDriver/?merchant_keys=" + krms_config.MerchantKeys ;
-	  ajax_uri+= "&device_id="+ device_id +"&token=" + token ;
-	  //ajax_uri+="&driver_id="+ $(".driver_id").val() ;
 	  
-	  params="driver_id="+ $(".driver_id").val() ;
+	  var ajax_uri = ajax_url+"/trackDriver/?"+ requestParams();
+	  
+	  params="order_id="+ $(".track_order_id").val() ;	  
 	  
 	  showLoaderDiv(true,'track_loader');
 	
 	  ajax_track = $.post(ajax_uri, params , function(data){			
-	  }, "jsonp")
+	  }, "json")
 	  
 	  ajax_track.done(function( data ) {				 	
 		 dump(data);			
 		 if(data.code==1){
-		 	settings = AppSettings();
-	        if (settings.map_provider=="mapbox"){
-	        	mapboxDriverMove( data.details.data.location_lat, data.details.data.location_lng  );
-	        } else {
-	        	//google
-	        	google_marker_track[2].setPosition( new google.maps.LatLng(data.details.data.location_lat , data.details.data.location_lng ) );		        	
-	        }
+		 			 	
+		 	datas = {
+        	  	status_raw:data.details.data.status_raw,
+        	  	rating:data.details.data.rating,
+        	  	driver_avatar : data.details.data.profile_photo,
+        	  	driver_name : data.details.data.driver_name
+        	};	        	          	
+		 	if( checkTaskStatus(datas)){
+    	  	   return ;
+    	    }		 	
+    	        	    
+    	    map_moveMarker( 1,  data.details.data.location_lat  , data.details.data.location_lng );
+	        map_setCenter( data.details.data.location_lat , data.details.data.location_lng );
+	            	    		 
 		 }
 	  });	
 	  
 	  ajax_track.always(function( data ) {		
 		dump("always")		
-		trackmap_interval = setInterval(function(){runTrackMap()}, 10000);
+		trackmap_interval = setInterval(function(){runTrackMap()}, interval_timeout);
 		showLoaderDiv(false,'track_loader');
 	 });
 	 
@@ -5432,6 +6178,7 @@ runTrackMap = function(){
 };
 
 stopTrackMapInterval = function(){
+	dump("stopTrackMapInterval");
     clearInterval(trackmap_interval);
     trackmap_interval=null;
 }
@@ -5447,6 +6194,8 @@ centerTrackMap = function(){
 
 showCustomPage = function(page_id){
 	dump("page_id=>"+ page_id);	
+	
+	closePanel();
 	
 	onsenNavigator.pushPage("custom_page.html",{
   	   animation : "slide", 
@@ -5537,4 +6286,1941 @@ var addReview = function(){
 		}
    	});
 	$(".frm_add_review").submit();
+};
+
+requestParams = function(action){
+	data ='';	
+	data+="&merchant_keys=" + krms_config.MerchantKeys;	
+	data+="&device_id=" + device_id;
+	data+="&device_platform=" + device_platform;
+	data+="&device_uiid=" + device_uiid;
+	data+="&code_version=" + code_version;
+	
+	token = getStorage("token");
+	if (!empty(token)){
+		data+="&token=" + token;
+	}	
+	data+="&lang="+ urlencode(getLangCode());
+	
+	transaction_type = $(".transaction_type").val();
+	if(!empty(transaction_type)){
+		data+="&transaction_type=" + transaction_type;
+	}		
+	
+	if(app_settings = AppSettings()){
+	   data+="&search_mode="+ app_settings.search_mode;
+	   data+="&location_mode="+ app_settings.location_mode;
+	}
+	
+	return data;
+};
+
+resetToPage = function(page_id, animation , data ){
+   if(empty(animation)){
+   	  animation='slide';
+   }
+   if(empty(data)){
+   	  data={};
+   }
+   onsenNavigator.resetToPage(page_id,{
+  	   animation : animation ,  	
+  	   data : data
+   });  
+};
+
+replacePage = function(page_id, animation, data){
+   if(empty(animation)){
+   	  animation='slide';
+   }
+   if(empty(data)){
+   	  data={};
+   }
+   onsenNavigator.replacePage(page_id,{
+  	   animation : animation ,  
+  	   data : data	
+   });  
+};
+
+bringPageTop = function(page_id, animation, data){
+   if(empty(animation)){
+   	  animation='slide';
+   }
+   if(empty(data)){
+   	  data={};
+   }
+   onsenNavigator.bringPageTop(page_id,{
+  	   animation : animation ,  
+  	   data : data	
+   });  
+};
+
+insertPage = function(page_id, animation, data){
+   if(empty(animation)){
+   	  animation='slide';
+   }
+   if(empty(data)){
+   	  data={};
+   }
+   onsenNavigator.insertPage(page_id,{
+  	   animation : animation ,  
+  	   data : data	
+   });  
+};
+
+showFloatingCategory = function(){
+   destroyList('floating_category_list');
+   fab_dialog = document.getElementById('floating_category');
+   if (fab_dialog) {
+   	   setFloatingCategory('floating_category_list');
+       fab_dialog.show();
+   } else {
+    ons.createElement('floating_category.html', { append: true })
+      .then(function(fab_dialog) {
+         setFloatingCategory('floating_category_list');
+         fab_dialog.show();
+      });
+   }
+};
+
+clickFormat = function(data){
+	json = data.split("|");
+	params ='';
+	if(json.length>0){
+		$.each(json, function(key, val){
+			params+= q(val)+",";
+		});
+	}
+	if(!empty(params)){
+		lent = parseInt(params.length)-1;
+		return params.substr(0, lent);
+	}	
+	return '';
+}
+
+q = function(data){
+	return "'" + addslashes(data) + "'";
+};
+
+showItemPageFloating = function(cat_id, cat_name , type){
+	document.getElementById("floating_category").hide();
+	if(type==1){
+		loadItem(cat_id,cat_name);
+	} else {
+		paginate_count=0;
+		$("#page_item .infinite_scroll_done").val(0);  
+		$('#page_item .page_title').innerHTML = cat_name;
+		$('#page_item .cat_id').val(cat_id);
+		$(".loader_item").html('');
+		ajaxCall('loadItemByCategory',"cat_id="+ cat_id);		
+	}
+};
+
+destroyList = function(element){
+	dump("destroyList");
+	dump(element);
+	$("#"+ element +" ons-list-item").remove();
+};
+
+getTimeNow = function(){
+	var d = new Date();
+    var n = d.getTime(); 
+    return n;
+};
+
+
+var pullHook = {};
+
+initPullHook = function(action, element, loader_div, data){
+	var timenow = getTimeNow();
+	pullHook[timenow] = document.getElementById(element);	
+	
+	if(pullHook[timenow]){
+		pullHook[timenow].addEventListener('changestate', function(event) {
+	    var message = '';		
+	    switch (event.state) {
+	      case 'initial':
+	        message = t('Pull to refresh');
+	        break;
+	      case 'preaction':
+	        message = t('Release');
+	        break;
+	      case 'action':
+	        message = t('Loading...');
+	        break;
+	     }		
+	     pullHook[timenow].innerHTML = message;
+	    }); 
+	}
+	
+	switch(action){
+				
+		case "loadItemByCategory":		   
+		   pullHook[timenow].onAction = function(done) {					
+			    params="&page_action=pull_refresh&";
+			    params+="cat_id="+ $(".cat_id").val();
+			    processDynamicAjax(action,params,loader_div,'GET',1 ); 
+			    setTimeout(function() {				     
+			 		done();
+			    }, 1000);
+			};   
+		break;
+		
+		case "loadBooking":
+		    pullHook[timenow].onAction = function(done) {					
+			    params="&page_action=pull_refresh&";
+			    params+="tab="+ $(".booking_tab_active").val();
+			    processDynamicAjax(action,params,loader_div,'GET',1 ); 
+			    setTimeout(function() {				     
+			 		done();
+			    }, 1000);
+			};   
+		break;
+		
+		case "getOrders":
+		    pullHook[timenow].onAction = function(done) {					
+			    params="&page_action=pull_refresh&";
+			    params+="tab="+ $(".orders_tab_active").val();
+			    processDynamicAjax(action,params,loader_div,'GET',1 ); 
+			    setTimeout(function() {				     
+			 		done();
+			    }, 1000);
+			};   
+		break;
+		
+		case "loadCart":		  
+		  pullHook[timenow].onAction = function(done) {						  	    
+			    processDynamicAjax("loadCart", '' , 'page_cart_loader',  '' , 1);
+			    setTimeout(function() {				     
+			 		done();
+			    }, 1000);
+			};   
+		break;
+		
+		case "getMerchantInfo":		    		    
+		    pullHook[timenow].onAction = function(done) {					
+		    	$(".info_wrap").html('');
+		        $(".info_wrap2").html('');
+			    params="&page_action=pull_refresh&";
+			    if(!empty(data)){
+			    	params+=data;
+			    }			    
+			    processDynamicAjax(action,params,loader_div,'GET',1 ); 
+			    setTimeout(function() {				     
+			 		done();
+			    }, 1000);
+			};   
+		break;
+		
+		default:
+		   pullHook[timenow].onAction = function(done) {					
+			    params="&page_action=pull_refresh&";
+			    if(!empty(data)){
+			    	params+=data;
+			    }			    
+			    processDynamicAjax(action,params,loader_div,'GET',1 ); 
+			    setTimeout(function() {				     
+			 		done();
+			    }, 1000);
+			};   
+		  break;
+	}
+	
+};
+
+initInfiniteScroll = function(page, action, element , data, inf_loader){	
+		
+	page.onInfiniteScroll = function(done) {
+		dump('initInfiniteScroll=>'+action);
+
+		infinite_page++;
+		params = "page="+infinite_page;
+		params+= "&page_action=infinite_scroll";
+		if(!empty(data)){
+			params+="&"+ data;
+		}		
+		
+		var infinite_done = '';
+		
+		switch(action){
+			case "FavoritesList":		
+			  infinite_done = parseInt($(element).val());
+			  dump("infinite_done=>"+infinite_done);
+			  if(infinite_done>0){
+			  	  dump('finish');	 		   	  
+	 		   	  done();
+			  } else {
+				  processDynamicAjax(action, params ,'favorites_loader', '' ); 
+				  setTimeout(function(){	
+	 		  	    done();
+	 		  	  }, 1000);
+			  }
+			break;
+			
+			case "PointsDetails":
+			  infinite_done = parseInt($(element).val());
+			  dump("infinite_done=>"+infinite_done);
+			  if(infinite_done>0){
+			  	  dump('finish');	 		   	  
+	 		   	  done();
+			  } else {
+				  processDynamicAjax(action, params ,'points_details_loader', '' ); 
+				  setTimeout(function(){	
+	 		  	    done();
+	 		  	  }, 1000);
+			  }
+			break;
+			
+			case "getCreditCards":
+			  infinite_done = parseInt($(element).val());
+			  dump("infinite_done=>"+infinite_done);
+			  if(infinite_done>0){
+			  	  dump('finish');	 		   	  
+	 		   	  done();
+			  } else {
+				  processDynamicAjax(action, params ,'creditcard_list_loader', '' ); 
+				  setTimeout(function(){	
+	 		  	    done();
+	 		  	  }, 1000);
+			  }
+			break;
+			
+			case "getAddressBookList":
+			  infinite_done = parseInt($(element).val());
+			  dump("infinite_done=>"+infinite_done);
+			  if(infinite_done>0){
+			  	  dump('finish');	 		   	  
+	 		   	  done();
+			  } else {
+				  processDynamicAjax(action, params ,'addressbook_list_loader', '' ); 
+				  setTimeout(function(){	
+	 		  	    done();
+	 		  	  }, 1000);
+			  }
+			break;
+			
+			case "loadBooking":
+			  infinite_done = parseInt($(element).val());
+			  dump("infinite_done=>"+infinite_done);
+			  if(infinite_done>0){
+			  	  dump('finish');	 		   	  
+	 		   	  done();
+			  } else {
+			  	  params+="&tab="+ $(".booking_tab_active").val() ;
+				  processDynamicAjax(action, params ,'addressbook_list_loader', '' ); 
+				  setTimeout(function(){	
+	 		  	    done();
+	 		  	  }, 1000);
+			  }
+			break;
+			
+			case "getOrders":
+			  infinite_done = parseInt($(element).val());
+			  dump("infinite_done=>"+infinite_done);
+			  if(infinite_done>0){
+			  	  dump('finish');	 		   	  
+	 		   	  done();
+			  } else {
+			  	  params+="&tab="+ $(".orders_tab_active").val() ;
+				  processDynamicAjax(action, params ,'orders_loader', '' ); 
+				  setTimeout(function(){	
+	 		  	    done();
+	 		  	  }, 1000);
+			  }
+			break;
+			
+			case "ReviewList":
+			  infinite_done = parseInt($(element).val());
+			  dump("infinite_done=>"+infinite_done);
+			  if(infinite_done>0){
+			  	  dump('finish');	 		   	  
+	 		   	  done();
+			  } else {
+				  processDynamicAjax(action, params ,'reviews_loader', '' ); 
+				  setTimeout(function(){	
+	 		  	    done();
+	 		  	  }, 1000);
+			  }
+			break;
+			
+			default:
+			  infinite_done = parseInt($(element).val());
+			  dump("infinite_done=>"+infinite_done);
+			  if(infinite_done>0){
+			  	  dump('finish');	 		   	  
+	 		   	  done();
+			  } else {
+				  processDynamicAjax(action, params , inf_loader , '' ); 
+				  setTimeout(function(){	
+	 		  	    done();
+	 		  	  }, 1000);
+			  }
+			break;
+			
+			
+		} /*end swicth*/
+	};
+};
+
+
+var ajax_array = {};
+var timer_array = {};
+
+/*mycall3*/
+processDynamicAjax = function(action, data , target,  method , single_call){
+	
+	endpoint = ajax_url+"/"+action;
+	
+	dump("processDynamicAjax=>"+ action);
+	if(empty(method)){
+		method='GET';
+	} else {
+		if(method=="POST"){
+		   endpoint+="?post=1";
+		}
+	}
+	
+	var timenow = getTimeNow();
+	if(!empty(single_call)){
+		var timenow = 1;
+	}		
+	
+	data+=requestParams();
+	
+	dump(endpoint);
+	
+	dump("AJAX VARIABLE")
+	dump(timenow);
+	dump("END AJAX VARIABLE")
+	
+	ajax_array[timenow] = $.ajax({
+	  url: endpoint ,
+	  method: method ,
+	  data: data ,
+	  dataType: "json",
+	  timeout: ajax_timeout ,
+	  crossDomain: true,
+	  beforeSend: function( xhr ) {
+         dump("before send ajax");   
+         
+         showLoaderDiv( true, target );
+         
+         clearTimeout( timer_array[timenow] );
+                                         
+         if(ajax_array[timenow] != null) {	
+         	ajax_array[timenow].abort();            
+            clearTimeout( timer_array[timenow] );            
+         } else {         	         	           	         	
+         	timer_array[timenow] = setTimeout(function() {		
+         		if(ajax_array[timenow] != null) {		
+				   ajax_array[timenow].abort();
+         		}         		
+         		showLoaderDiv( false, target );				
+				$("."+ target).html( '<p class="small">'+ t('Request taking lot of time. Please try again') +'</p>' );
+	        }, ajax_timeout ); 
+         }
+      }
+    });
+    
+
+    ajax_array[timenow].done(function( data ) {
+    	showLoaderDiv( false, target );
+    	if(data.code==1){
+    		switch(action){
+    			case "getAddressBookList":    			    
+    			    if(data.details.page_action=="pull_refresh"){    			    	
+    			       destroyList('ons_addressbook_list');
+        		  	   $("#addressbook_list .addressbook_infinite").val(0);
+        		  	   infinite_page=0;
+    			    }    			    
+	        	    addressList(data.details.data,'ons_addressbook_list')
+    			break;
+    			
+    			case "getCreditCards":    		
+    			  if(data.details.page_action=="pull_refresh"){
+        		  	 destroyList('ons_creditcard_list');
+        		  	 $("#creditcard_list .creditcard_infinite").val(0);
+        		  	 infinite_page=0;
+        		  }	                    
+	        	  ccLIst(data.details.data,'ons_creditcard_list');
+        		break;
+    			
+        		case "loadCategory":
+        		  $("#page_category .infinite_scroll_done").val(0);
+        		  page_category =1;
+        		  destroyList('infinite_category');
+        		  displayCategory(data.details.data);
+        		break;
+        		
+        		case "loadItemByCategory":
+        		   paginate_count=1; 
+        		   $("#page_item .infinite_scroll_done").val(0); 
+        		   $(".cat_id").val( data.details.cat_id);
+        		   destroyList("infinite_item");
+	        	   displayItem(data.details.data , data.details.cat_id);
+        		break;
+        		
+        		case "pointsSummary":
+        		  destroyList('points_main_list');
+	        	  setPoints('points_main_list',data.details.data);
+        		break;
+        		
+        		case "PointsDetails":        		   
+        		   if(data.details.page_action=="pull_refresh"){
+        		  	 destroyList('points_details_list');
+        		  	 $("#points_details .points_details_infinite").val(0);
+        		  	 infinite_page=0;
+        		   }
+	        	   setPointsDetails('points_details_list',data.details.data);
+        		break;
+        		
+        		case "FavoritesList":        
+        		  if(data.details.page_action=="pull_refresh"){
+        		  	 destroyList('favorites_list');
+        		  	 $("#favorites .favorites_infinite").val(0);
+        		  	 infinite_page=0;
+        		  }
+        		  setFavoriteList(data.details.data, "favorites_list");        		           		  
+				  setTimeout(function() {	
+					   initRatyStatic();		   
+				       initImageLoaded();					       
+				  }, 100); 
+        		break;
+        		
+        		case "loadBooking":
+        		  if(data.details.page_action=="pull_refresh"){
+        		  	 destroyList('booking_list');
+        		  	 $("#booking_history .booking_infinite").val(0);
+        		  	 infinite_page=0;
+        		  }
+        		  setBookingList('booking_list', data.details.data);
+        		  
+        		  setTimeout(function() {	
+					   initRatyStatic();		   
+				       initImageLoaded();					       
+				  }, 100); 
+        		break;
+        		
+        		case "getOrders":
+        		  if(data.details.page_action=="pull_refresh"){
+        		  	 destroyList('orders_list');
+        		  	 $("#orders .orders_infinite").val(0);
+        		  	 infinite_page=0;
+        		  }
+        		  setOrderList('orders_list', data.details.data);
+        		  
+        		  setTimeout(function() {	
+					   initRatyStatic();		   
+				       initImageLoaded();					       
+				  }, 100); 
+        		break;
+        		
+        		case "getOrderHistory":
+        		   if(data.details.page_action=="pull_refresh"){
+        		  	 destroyList('track_order_list');         		  	 
+        		  }
+        		  setOrderHistory('.details_with_logo', data.details.order_info);
+        		  setOrderHistoryList('track_order_list', data.details.data);
+        		  
+        		  enabledTrack(data.details.show_track);
+        		  
+        		  setTimeout(function() {	
+					   initRatyStatic();		   
+				       initImageLoaded();					       
+				  }, 100); 
+				  
+				  runOrderHistory(true);
+				  
+        		break;
+        		
+        		case "ReGetOrderHistory":
+        		  runOrderHistory(false);
+        		  enabledTrack(data.details.show_track);
+        		  
+        		  //alert( $("#track_order_list ons-list-item").length +" =>" + data.details.data_count );
+        		  
+        		  current_list = $("#track_order_list ons-list-item").length;
+        		  current_list = parseInt(current_list+0);
+        		  new_list = parseInt(data.details.data_count);
+        		  
+        		  if(current_list!=new_list){
+        		     destroyList('track_order_list');  
+        		     setOrderHistoryList('track_order_list', data.details.data);
+        		  } else {
+        		  	  dump('same no changes');
+        		  }
+        		          		          		  
+        		   setTimeout(function() {	
+					   runOrderHistory(true);
+				  }, 100); 
+        		break;
+        		
+        		case "ReviewList":
+        		   if(data.details.page_action=="pull_refresh"){
+        		  	 destroyList('reviews_list');
+        		  	 $("#reviews .reviews_infinite").val(0);
+        		  	 infinite_page=0;
+        		   }
+        		   setReviewList("reviews_list", data.details.data);
+        		   setTimeout(function() {	
+					   initRatyStatic();		   
+				       initImageLoaded();					       
+				  }, 100); 
+        		break;
+        		
+        		case "GetNotification":
+        		  if(data.details.page_action=="pull_refresh"){
+        		  	 destroyList('notification_list');
+        		  	 $("#notification .notification_infinite").val(0);
+        		  	 infinite_page=0;
+        		   }
+        		   setNotification("notification_list", data.details.data);
+        		break;
+        		
+        		case "GetGallery":
+        		  if(data.details.page_action=="pull_refresh"){
+        		  	 destroyList('photo_list');        		  	 
+        		  	 infinite_page=0;
+        		   }
+        		  setGallery( 'photo_list', data.details.data);
+        		   setTimeout(function() {						   		  
+				       initImageLoaded();					       
+				  }, 100); 
+        		break;
+        		
+        		case "searchOrder":
+        		  setSearchOrder("search_order_list", data.details.data);
+        		break;
+        		
+        		case "searchBooking":
+        		  setSearchBooking("search_booking_list", data.details.data);
+        		break;
+        		
+        		case "GetBookingDetails":
+        		  if(data.details.page_action=="pull_refresh"){
+        		  	 destroyList('booking_details_list');        		  	 
+        		  }
+        		  setBookingDetails("booking_details_list", data.details.data);
+        		break;
+        		
+        		case "getlanguageList":
+        	 	  if(data.details.page_action=="pull_refresh"){
+        		  	 destroyList('language_list');        		  	 
+        		  }
+        		  setlanguageList("language_list", data.details.data, data.details.lang );
+        	 	break;
+        	 	
+        	 	case "loadItemDetails":
+        	 	  
+        	 	  $("#page_item_details ons-bottom-toolbar").show();
+        	 	 
+        	 	  $("#page_item_details .center").html( data.details.data.item_name );
+	        	  $(".category_id").val(data.details.cat_id);
+	        	  tpl = displayItemDetails(data.details.data , data.details.cart_data);
+	        	  $(".item_details_wrap").html( tpl ) ;
+	        	  
+	        	  if ( data.details.ordering_disabled==1){
+	        	  	  showToast(data.details.ordering_msg);
+	        	  	  $("#page_item_details ons-bottom-toolbar").hide();
+	        	  }
+	        	  if(settings = AppSettings()){
+					if(settings.website_hide_foodprice=="yes"){
+						$("#page_item_details ons-bottom-toolbar").hide();
+					}
+				  }				  
+				  initImageLoaded();        	 	  
+        	 	break;
+        	 	
+        	 	case "GetRecentLocation":
+        	 	  if(data.details.page_action=="pull_refresh"){
+        		  	 destroyList('map_enter_address_list');        		
+        		  	 $("#map_enter_address .map_enter_address_infinite").val(0);  	 
+        		  	 infinite_page=0;
+        		  }
+        	 	  setGetRecentLocation("map_enter_address_list", data.details.data);
+        	 	break;
+        	 	
+        	 	case "loadCart":        	 	
+        	 	  setStorage("next_step", 'payment_option' );
+        	 	  
+        	 	  if ( data.details.required_delivery_time=="yes"){
+        		  	 $(".required_delivery_time").val(1);
+        		  } else {
+        		  	 $(".required_delivery_time").val('');
+        		  }
+        		  
+        		  $(".has_addressbook").val( data.details.has_addressbook );
+        		  $(".sms_order_session").val( data.details.sms_order_session);
+        		  
+	        	  $(".no_order_wrap").hide();
+	        	  $(".bottom_toolbar_checkout").show();
+	        	  tpl = displayCartDetails(data.details);
+	        	  $(".cart_details").html( tpl ) ;
+	        	  
+	        	  if(data.details.cart_error.length>0){
+	        	  	 $('.bottom_toolbar_checkout ons-button').attr("disabled",true);
+	        	  	 cart_error='';     	  	
+	        	  	 $.each( data.details.cart_error  , function( cart_error_key, cart_error_val ) {
+	        	  		 cart_error+=cart_error_val + "\n";
+	        	  	 });
+	        	  	 showAlert(cart_error);
+	        	  } else {
+	        	  	$('.bottom_toolbar_checkout ons-button').attr("disabled",false);
+	        	  }	        	  	        	  
+        	 	break;
+        	 	
+        	 	case "getMerchantInfo":
+        	 	  setgetMerchantInfo(data.details.data);
+        	 	break;
+        	 	
+        	 	case "loadPromo":        	 	    
+        	 	    tpl='';
+	        	    if ( data.details.data.enabled==2){
+	        	    	tpl = displayPromo(data.details.data);    
+	        	    	$(".promo_wrap").html( tpl );
+	        	    } else {	        	    	
+	        	    	$(".promo_wrap").html( templateError(data.details.title,data.details.sub_title) );
+	        	    }
+        	 	break;
+        	 	
+        	 	case "ItemFavoritesList":
+        	 	  if(data.details.page_action=="pull_refresh"){
+        		  	 destroyList('favorites_item_list');        		
+        		  	 $(".favorites_item_done").val(0);  	 
+        		  	 infinite_page=0;
+        		  }
+        	 	  setItemFavoritesList("favorites_item_list", data.details.data);
+        	 	  setTimeout(function() {						   
+				       initImageLoaded();					       
+				  }, 100); 
+        	 	break;
+        	 	
+        	 	case "getPagesByID":
+        	 	   $(".custom_page_title").html( data.details.data.title );
+	        	   $(".custom_page_loader").html( '<div class="text_content">'+data.details.data.content+'</div>' );
+        	 	break;
+        	 	
+        	 	case "StateList":
+        	 	  if(data.details.page_action=="pull_refresh"){
+        		  	 destroyList('location_state_list');        		
+        		  	 $(".location_state_done").val(0);  	 
+        		  	 infinite_page=0;
+        		  }
+        		  setStateList('location_state_list',data.details.data);
+        	 	break;
+        	 	
+        	 	case "CityList":
+        	 	   if(data.details.page_action=="pull_refresh"){
+        		  	 destroyList('location_city_list');        		
+        		  	 $(".location_city_done").val(0);  	 
+        		  	 infinite_page=0;
+        		  }
+        		  setCityList('location_city_list',data.details.data);
+        	 	break;
+        	 	
+        	 	case "AreaList":
+        	 	  if(data.details.page_action=="pull_refresh"){
+        		  	 destroyList('location_area_list');        		
+        		  	 $(".location_area_done").val(0);  	 
+        		  	 infinite_page=0;
+        		  }
+        		  setAreaList('location_area_list',data.details.data);
+        	 	break;
+        	 	
+    			default:
+    			break;
+    			
+    		}
+    		
+    		/*FAILED CONDITION*/
+    		
+        } else if ( data.code==3){	
+        	// token not valid
+        	 switch (action){
+        	 	
+        	 	case "getOrders":        	 	
+        	 	   $("#orders_tabs").attr('disabled',true);
+        	 	   destroyList('orders_list');
+	        	   $(".orders_loader").html( templateError(data.details.title,data.details.sub_title) );
+        	 	break;
+        	 	
+        	 	default:
+        	 	showToast(data.msg);
+        	 	break;
+        	 }        	 
+        	        		
+        } else if ( data.code==4){	        	  
+        	  switch (action){
+        	  	 case "loadCart":
+        	  	   $(".page_cart_loader").html( templateError(data.msg, t("sorry we don't accept any order for today") ) );
+        	  	 break;
+        	  }
+    	} else if ( data.code==6){	
+    		
+    		switch (action){
+        		case "getAddressBookList":
+        		  destroyList('ons_addressbook_list');
+        		  $(".addressbook_list_loader").html( templateError(data.details.title,data.details.sub_title) );
+        		break;
+        		
+        		case "getCreditCards":
+        		  destroyList('ons_creditcard_list');
+        		  $(".creditcard_list_loader").html( templateError(data.details.title,data.details.sub_title) );
+        		break;
+        		
+        		case "PointsDetails":
+        		   destroyList('points_details_list');
+	        	   $(".points_details_loader").html( templateError(data.details.title,data.details.sub_title) );
+        		break;
+        		
+        		case "FavoritesList":
+        		   destroyList('favorites_list');
+	        	   $(".favorites_loader").html( templateError(data.details.title,data.details.sub_title) );
+        		break;
+        		
+        		case "loadBooking":
+        		   destroyList('booking_list');
+	        	   $(".booking_loader").html( templateError(data.details.title,data.details.sub_title) );
+        		break;
+        		
+        		case "getOrders":
+        		   destroyList('orders_list');
+	        	   $(".orders_loader").html( templateError(data.details.title,data.details.sub_title) );
+        		break;
+        		
+        		case "getOrderHistory":
+        		   destroyList('track_order_list');
+        		   $(".details_with_logo").html('');
+	        	   $(".track_order_loader").html( templateError(data.details.title,data.details.sub_title) );
+        		break;
+        		
+        		case "ReGetOrderHistory":
+        		  runOrderHistory(false);
+        		  enabledTrack(false);
+        		break;
+        		
+        		case "ReviewList":
+        		   destroyList('reviews_list');
+	        	   $(".reviews_loader").html( templateError(data.details.title,data.details.sub_title) );
+        		break;
+        		
+        		case "GetNotification":
+        		   destroyList('notification_list');
+	        	   $(".notification_loader").html( templateError(data.details.title,data.details.sub_title) );
+        		break;
+        		
+        		case "GetGallery":
+        		   destroyList('photo_list');
+	        	   $(".photo_loader").html( templateError(data.details.title,data.details.sub_title) );
+        		break;
+        		
+        		case "GetBookingDetails":
+        		   destroyList('booking_details_list');
+	        	   $(".booking_details_loader").html( templateError(data.details.title,data.details.sub_title) );
+        		break;
+        		
+        		case "getlanguageList":
+        		   destroyList('language_list');
+	        	   $(".language_loader").html( templateError(data.details.title,data.details.sub_title) );
+        		break;
+        		
+        		case "loadItemDetails":
+        		  $(".page_item_details_loader").html( templateError(data.details.title,data.details.sub_title) );
+        		  $(".item_details_wrap").html( '' ) ;
+        		  $("#page_item_details ons-bottom-toolbar").hide();
+        		break;
+        		
+        		case "loadItemByCategory":
+        		  destroyList('infinite_item');
+	    		  $(".loader_item").html( templateError(data.details.title,data.details.sub_title) ); 		 
+        		break;
+        		
+        		case "loadCategory":
+	    		  destroyList('infinite_category');
+	    		  $(".category_loader").html( templateError(data.details.title,data.details.sub_title) ); 		 
+	    		break;
+	    		
+	    		case "saveLocationAddress":
+	    		break;
+	    		
+	    		case "GetRecentLocation":
+	    		  destroyList('map_enter_address_list');
+	    		  $("#clear_recent_location").remove();
+	    		break;
+	    		
+	    		case "ItemFavoritesList":
+	    		  destroyList('favorites_item_list');
+	    		  $(".favorites_item_loader").html( templateError(data.details.title,data.details.sub_title) );	    		  
+	    		break;
+	    		
+	    		case "getPagesByID":	    		  
+	    		  $(".custom_page_title").html( '' );	        	  
+	        	  $(".custom_page_loader").html( templateError(data.details.title,data.details.sub_title) );	    		  
+	    		break;
+	    		
+	    		case "StateList":
+	    		  destroyList('location_state_list');
+	    		  $(".location_state_loader").html( templateError(data.details.title,data.details.sub_title) ); 		 
+	    		break;
+	    		
+	    		case "CityList":
+	    		  destroyList('location_city_list');
+	    		  $(".location_city_loader").html( templateError(data.details.title,data.details.sub_title) ); 		 
+	    		break;
+	    		
+	    		case "AreaList":
+	    		  destroyList('location_area_list');
+	    		  $(".location_area_loader").html( templateError(data.details.title,data.details.sub_title) ); 		 
+	    		break;
+	    		
+        		        		
+        	}	        	
+        	
+    	} else {
+    		/*FAILED CONDITION*/
+    		switch(action){    		
+    			
+    			case "getAddressBookList":
+    			    $("#addressbook_list .addressbook_infinite").val(1);
+    			break;
+    			
+    			case "loadCategory":
+    			  $("#page_category .infinite_scroll_done").val(0);
+        		  destroyList('infinite_category');   
+        		  showToast(data.msg);	         		  
+        		break;
+        		
+        		case "loadItemByCategory":
+        		   showToast(data.msg);
+        		   paginate_count=1;        		   
+        		   $("#page_item .infinite_scroll_done").val(0); 
+        		   destroyList("infinite_item");	        	   
+        		break;
+        		
+        		case "FavoritesList":
+        		   $("#favorites .favorites_infinite").val(1);
+        		break;
+        		
+        		case "PointsDetails":
+        		   $("#points_details .points_details_infinite").val(1);
+        		break;
+        		
+        		case "getCreditCards":   
+        		   $("#creditcard_list .creditcard_infinite").val(1);
+        		break;
+        		        		
+        		case "loadBooking":
+        		  $("#booking_history .booking_infinite").val(1);
+        		break;
+        		
+        		case "getOrders":
+        		  $("#orders .orders_infinite").val(1);
+        		break;
+        		
+        		case "getOrderHistory":
+        		   destroyList('track_order_list');	 
+        		   $(".details_with_logo").html('');
+        		   showToast(data.msg);
+        		break;
+        		
+        		case "GetNotification":
+        		  $("#notification .notification_infinite").val(1);
+        		break;
+
+        		case "searchOrder":
+        		  destroyList('search_order_list');	 
+        		  $(".search_order_loader").html( '<p class="small_resp text-left">'+data.msg+'</p>');
+        		break;   			
+        		
+        		case "saveLocationAddress":
+        		break; 
+        		
+        		case "GetRecentLocation":
+        		  $("#map_enter_address .map_enter_address_infinite").val(1);
+        		break; 
+        		
+        		case "loadCart":     
+        		  $(".no_order_wrap").show();
+	        	  $(".cart_details").html( '' ) ;
+	        	  $(".cart_total").html('');
+	        	  $(".bottom_toolbar_checkout").hide();	  
+        		break; 
+        		
+        		case "getMerchantInfo":
+	        	  $(".info_wrap").html( templateError(data.details.title,data.details.sub_title) );
+	        	  $(".info_wrap2").html('');
+	        	break;
+	        	
+	        	case "ItemFavoritesList":
+        		  $(".favorites_item_done").val(1);
+        		break;
+        		
+        		case "StateList":
+        		 $(".location_state_done").val(1);
+        		break;
+        		
+        		case "CityList":
+        		 $(".location_city_done").val(1);
+        		break;
+        		
+        		case "AreaList":
+        		 $(".location_area_done").val(1);
+        		break;
+        		
+        		case "searchBooking":
+        		  destroyList('booking_details_list');	        		  
+        		  $(".search_booking_loader").html( '<p class="small_resp text-left">'+data.msg+'</p>');
+        		break;
+        		
+        		case "ReviewList":
+    			    $("#reviews .reviews_infinite").val(1);
+    			break;
+    			
+        		
+    			default:
+    			showToast(data.msg);
+    			break;    			
+    		}
+    	}    		
+    });    	
+    
+   /*ALWAYS*/
+    ajax_array[timenow].always(function() {        
+        ajax_array[timenow] = null;  
+        clearTimeout( timer_array[timenow] );
+    });
+          
+    /*FAIL*/
+    ajax_array[timenow].fail(function( jqXHR, textStatus ) {
+    	showLoaderDiv( false, target );
+    	clearTimeout( timer_array[timenow] );    	
+    	//showToast( t("Failed") + ": " + textStatus );       	
+    });     
+	    
+    
+};
+
+isdebug = function(){
+	if (krms_config.debug){
+		return true;
+	}
+	return false;
+};
+
+getDefaultCountry = function(){
+	if(app_settings = AppSettings()){
+		geocomplete_default_country = app_settings.geocomplete_default_country;
+		if(geocomplete_default_country=="yes"){
+			return app_settings.map_country;
+		}		
+	} 
+	return '';
+};
+
+ReCurrentLocation = function(){
+	popPage();	
+	
+	if(isLocation()){					    	
+    	clearLocationForm({
+			city:'city',
+			area:'area',
+			state:'state'
+		});
+    }
+	
+	setTimeout(function() {		
+       CurrentLocation();
+    }, 100); 
+};
+
+CurrentLocation = function(){	
+	map_bounds = [];
+	$(".identify_location_wrap").hide();
+	locateLocation();
+};
+
+showPointsDetails = function(title, point_type){
+	showPage("points_details.html",'none',{
+		page_title : title,
+		point_type:point_type
+	});
+};
+
+
+initRaty = function(element, score){
+	$(element).raty({ 
+	   score:score,
+	   readOnly: false, 		
+	   path: 'lib/raty/images',
+	   click: function (score, evt) {	   	   
+	   	   $(".rating").val( score );
+	   }
+   }); 	
+};
+
+initRatyStatic = function(){
+	$('.raty-stars').raty({ 
+		readOnly: true, 
+		score: function() {
+             return $(this).attr('data-score');
+       },
+		path: 'lib/raty/images'
+    });
+};
+
+resetPaginate = function(action,list,element,loader,data){	
+	infinite_page = 0; 
+	destroyList(list);     
+    $(element).val(0);
+	processDynamicAjax(action,data,loader,'',1);
+};
+
+SetBookingTab = function(index, tab){
+	document.querySelector('#booking_tabs').setActiveIndex(index);
+	$("#booking_tabs ons-carousel-item").removeClass("selected");
+    $("#booking_tabs ons-carousel-item:eq("+index+")").addClass("selected");    
+    
+    $(".booking_tab_active").val(tab);
+    
+    destroyList('booking_list');
+    $("#booking_history .booking_infinite").val(0);
+    infinite_page=0;
+    processDynamicAjax("loadBooking", "tab="+tab , 'booking_loader',  '' ,1);
+};
+
+SetOrderTab = function(index, tab){
+	document.querySelector('#orders_tabs').setActiveIndex(index);
+	$("#orders_tabs ons-carousel-item").removeClass("selected");
+    $("#orders_tabs ons-carousel-item:eq("+index+")").addClass("selected");    
+    
+    $(".orders_tab_active").val(tab);
+    
+    destroyList('orders_list');
+    $("#orders .orders_infinite").val(0);
+    infinite_page=0;
+    processDynamicAjax("getOrders", "tab="+tab , 'orders_loader',  '' ,1);
+};
+
+actionSheetOrder = function(order_id, add_review, add_cancel, add_track){
+	if(order_id<=0){
+		showToast( t("invalid order id") );
+		return false;
+	}	
+		
+	actions = [];
+	
+	actions[0] = {
+		 label: t("View Order"),
+	};
+	actions[1] = {
+		 label: t("Re-Order"),
+	};
+	
+	if(add_review){
+		actions[2] = {
+			 label: t("Add Review"),
+		};
+	}
+	
+	if(add_cancel){
+		actions[3] = {
+			 label: t("Cancel Order"),
+		};
+	}
+	
+	if(add_track){
+		actions[4] = {
+			 label: t("Track Order"),
+		};	
+	}
+	
+	actions[5] = {
+		 label: t("Close"),
+		 icon: 'md-close'
+	};
+	
+	//delete actions[ 2 ];
+		
+	ons.openActionSheet({
+	    title: t("What do you want to do?"),
+	    cancelable: true,
+	    buttons: actions
+  }).then(function (index) { 
+  	   console.log('index: ', index) 
+  	   switch(index){
+  	   	  case 0: // view receipt
+  	   	    showPage('order_details.html','none',{
+  	   	   	 "order_id": order_id
+  	   	   });
+  	   	  break
+  	   	  
+  	   	  case 1:
+  	   	    ajaxCall( "ReOrder" , "id="+ order_id );
+  	   	  break
+  	   	  
+  	   	  case 2:
+  	   	   showPage('add_review.html','none',{
+  	   	   	 "order_id": order_id
+  	   	   });
+  	   	  break
+  	   	  
+  	   	  case 3:  	   	      	   	 
+  	   	    showPage('cancel_order_form.html','none',{
+  	   	   	 "order_id": order_id
+  	   	   });			   
+  	   	  break
+  	   	  
+  	   	  case 4:
+  	   	    showPage('track_order.html','none',{
+  	   	   	 "order_id": order_id
+  	   	   });
+  	   	  break
+  	   	  
+  	   	  default:
+  	   	  break
+  	   }
+  });
+	
+};
+
+enabledTrack = function(is_enabled){
+	if(is_enabled){
+		enabled = false;
+	} else {
+		enabled = true;
+	}
+	$("#track_driver_button").attr("disabled",enabled);
+};
+
+runOrderHistory = function(run){
+	dump("runOrderHistory=>"+ run);
+	if(run){		
+		dump("runOrderHistory=> run");
+		track_interval = setInterval(function(){
+			processDynamicAjax("ReGetOrderHistory", "order_id="+ $(".track_order_id").val() , 'track_order_loader',  'GET' , 1);
+		}, interval_timeout );	
+	} else {
+		dump("runOrderHistory=> stop");
+		clearInterval(track_interval);
+	}
+};
+
+submitForm = function(form_name, action_name , method ){	
+	$(form_name).validate({
+   	    submitHandler: function(form) {   	    	 
+   	    	 var params = $( form_name ).serialize();   	    	 
+		     ajaxCall(action_name, params , method );
+		}
+   	});
+	$(form_name).submit();
+};
+
+reloadOrderList = function(){
+	popPage();
+    destroyList("orders_list");
+    $("#orders .orders_infinite").val(0);
+    infinite_page=0;
+    $(".orders_tab_active").val("all");
+    processDynamicAjax("getOrders", "tab=all"  , 'orders_loader',  '' , 1);	
+};
+
+checkTaskStatus = function(data){
+	tpl_message = ''; with_ratings = false;
+	with_return = true;
+	switch(data.status_raw){ 	
+		case "inprogress":
+		  with_return = false;
+		  tpl_message+='<h6>'+ t("Your Delivery Guy") +'</h6>';
+		  tpl_message+='<h2>'+ data.driver_name+'</h2>';
+		  tpl_message+='<h5>'+ t("has arrived!") +'</h5>';
+		break;	
+		
+		case "successful":
+		  if(data.rating>0){		  			  
+			  with_ratings = true;
+			  tpl_message='<p>'+ t("You have already rated this delivery") +'</p>';
+		  } else {
+		  	 initModal(false);
+		  	  replacePage("rate_driver.html",'none',{
+	 		  	task_id: $(".track_task_id").val()
+	 		  });
+		  }
+		break;	
+		
+		case "cancelled":
+		  stopTrackMapInterval();
+		  tpl_message='<p>'+ t("This Delivery was set to cancelled by the driver") +'</p>';
+		break;	
+		
+		case "failed":
+		  stopTrackMapInterval();
+		  tpl_message='<p>'+ t("This Delivery was set to failed by the driver") +'</p>';
+		break;	
+ 	}		 	
+ 	
+ 	if(!empty(tpl_message)){ 		
+ 		 initModal(true); 		  	 
+		  	setTimeout(function(){
+		    alreadyRateTask(with_return, "#modal_pop_content",  tpl_message , data.driver_avatar, data.rating);
+		    if(with_ratings){
+		       initRatyStatic();
+		    }
+		    initImageLoaded();
+		 },1); 	
+ 		return with_return;
+ 	}
+ 	
+ 	return false;
+};
+
+initModal = function(show){
+	var modal = document.querySelector('#modal_pop');
+	if(show){
+	   modal.show();	  
+	  /*if(!modal.visible){	  	
+	  	  modal.show();	  
+	  } 	  */
+	} else {
+	  modal.hide();
+	}		  
+};
+
+closeModalRating = function(){
+	initModal(false);
+	popPage();
+};
+
+confirmClearNotification = function(){
+	
+	list = $("#notification_list ons-list-item").length;	
+	if(list<=0){
+		return;
+	}
+	
+	ons.platform.select('ios'); 
+	ons.notification.confirm( t("Clear all notification?") ,{
+		title: dialog_title,
+		buttonLabels : [  t("Ok"), t("Cancel") ]
+	}).then(function(input) {
+		if (input==0){		
+			ajaxCall("clearNotification",'' );						
+		}
+	});	
+};
+
+notificationSheet = function(id){
+	
+ ons.openActionSheet({
+    title:  t('What do you want to do?') ,
+    cancelable: true,
+    buttons: [      
+      {
+        label: t('Remove') ,        
+      },
+      {
+        label: t('Close'),    
+        icon: 'md-close'
+      }
+    ]
+  }).then(function (index) { 
+  	  if ( index==0){  	  	    	  	  	  	
+  	  	  ajaxCall("clearNotification", "id="+id );
+  	  } 
+  });
+  	
+};
+
+FullImageView = function(url){
+	if(!empty(url)){
+		if(isdebug()){		  
+			window.open( url );
+		} else {			
+			PhotoViewer.show( url , '');
+		}
+	} else {
+		showToast( t("invalid image url") );
+	}
+};
+
+showBookingDetails = function(booking_id){
+	showPage("booking_details.html",'none',{
+		booking_id:booking_id
+	});
+};
+
+setLanguage = function(lang_code){	
+	if(!empty(lang_code)){
+	   setStorage("lang", lang_code);	   
+	   resetToPage('page_home.html','none');
+	}
+};
+
+trackOrder = function(){
+	showPage("track_order.html",'',{
+		order_id: $(".receipt_order_id").val()
+	});
+};
+
+clearRecentLocation = function(){	
+	ons.platform.select('ios'); 
+	ons.notification.confirm( t("Are you sure?") ,{
+		title: dialog_title,
+		buttonLabels : [  t("Ok"), t("Cancel") ]
+	}).then(function(input) {
+		if (input==0){						
+	        ajaxCall("ClearLocation", '' );
+		} /*end if*/
+	});	
+};
+
+setRecentSearch = function(lat,lng,search_address, street,city,state,zipcode,country,location_name){
+	
+	if(empty(lat)){
+		showToast( t('invalid latitude') );
+		return false;
+	}
+	if(empty(lng)){
+		showToast( t('invalid longitude') );
+		return false;
+	}
+	
+	popPage();	
+	setTimeout(function() {		
+       
+	   map_setLangLngValue( lat , lng );
+	   map_setCenter( lat , lng );
+	   map_moveMarker( 1, lat ,  lng );
+	   
+	   current_page_id = onsenNavigator.topPage.id;
+	   dump("current_page_id=>"+current_page_id);
+	   	   
+	   $(".lat").val(lat);
+	   $(".lng").val(lng);
+	   $(".search_address2").val(search_address);
+	   $(".street").val(street);
+	   $(".city").val(city);
+	   $(".state").val(state);	   
+	   $(".zipcode").val(zipcode);	   
+	   $(".location_name").val(location_name);	   
+	   
+    }, 100); 
+};
+
+
+setRecentSearchLocation = function(lat,lng,search_address, street,city,state,zipcode,country,location_name,state_id,city_id,area_id,country_id){
+		
+	if(empty(lat)){
+		showToast( t('invalid latitude') );
+		return false;
+	}
+	if(empty(lng)){
+		showToast( t('invalid longitude') );
+		return false;
+	}
+	
+	popPage();	
+	setTimeout(function() {		
+       
+	   map_setLangLngValue( lat , lng );
+	   map_setCenter( lat , lng );
+	   map_moveMarker( 1, lat ,  lng );
+	   
+	   current_page_id = onsenNavigator.topPage.id;
+	   dump("current_page_id=>"+current_page_id);
+	   	   
+	   $(".lat").val(lat);
+	   $(".lng").val(lng);
+	   $(".search_address2").val(search_address);
+	   $(".street").val(street);
+	   
+	   $(".city_name").val(city);
+	   $(".city_name_raw").val(city);
+	   
+	   $(".state_raw").val(state);	   
+	   $(".state_name").val(state);	   
+	   
+	   $(".area_name").val(zipcode);	   
+	   $(".area_name_raw").val(zipcode);	
+	   
+	   $(".location_name").val(location_name);	   
+	   
+	   $(".state_id").val(state_id);	   
+	   $(".city_id").val(city_id);	   
+	   $(".area_id").val(area_id);	   
+	   $(".country_id").val(country_id);	   
+	   $(".country_name").val(country);	   
+	   
+    }, 100); 
+};
+
+
+setStartupLanguage = function(lang){	
+	setStorage("lang",lang);
+	continueToApp();
+};
+
+continueToApp = function(){
+	
+	if(!isLogin()){
+		if(settings = AppSettings()){
+		   if(settings.home.startup_banner==2){
+		   	  resetToPage('startup_banner.html','none');
+		   	  return;
+		   }
+		}
+	}
+	
+	if(isLogin()){
+		setTimeout(function(){
+	 	onsenNavigator.resetToPage('page_home.html',{
+		  animation : "none",		  	
+		});	
+	   }, 100);
+	} else {
+		setTimeout(function(){
+	 	onsenNavigator.resetToPage('page_startup.html',{
+		  animation : "slide",		  	
+		});	
+	   }, 100);
+	}
+};
+
+runStartUpBanner = function(stop_interval){
+
+   interval = 4000;
+   if(settings = AppSettings()){
+   	  if(settings.home.startup_banner_auto!=1){      	  	 
+   	  	 return;
+   	  }
+   	  interval = parseInt(settings.home.startup_banner_interval)+0;   	  
+   }   
+   
+   if(interval<=0){
+   	  interval = 4000;
+   }
+      
+   if(stop_interval){
+	  dump("STOP=>runStartUpBanner");
+	  clearInterval(startup_banner_interval);	  
+   } else {
+   	  dump("RUN=>runStartUpBanner");
+      startup_banner_interval = setInterval(function(){StartUpBannerAutoScroll()}, interval );
+   }
+};
+
+StartUpBannerAutoScroll = function(){	
+	dump("StartUpBannerAutoScroll");
+	var total_banner = 0;
+	var startup_banner_index = $(".startup_banner_index").val();
+	startup_banner_index = parseInt(startup_banner_index)+0;
+	if(settings = AppSettings()){
+		total_banner=settings.startup_banner_images.length;
+		total_banner = parseInt(total_banner)-1;
+	}
+	dump("total_banner=>"+total_banner);
+	var scroll_banner = document.getElementById('startup_banner_carousel');
+		
+	if(startup_banner_index>=total_banner){
+	   scroll_banner.setActiveIndex(0);
+	   $(".startup_banner_index").val(0);
+	} else {	
+	   scroll_banner.next();
+	}
+};
+
+AddFavorite = function(){
+	if(isLogin()){ 
+	   params = "item_id="+ $(".item_id").val();
+	   params+="&category_id=" + $(".category_id").val();
+       ajaxCall("AddFavorite", params );
+	} else {
+	   setStorage('next_step','add_favorite');	
+	   showPage('login.html','none');
+	}
+};
+
+RemoveFavorite = function(){
+	if(isLogin()){ 
+       ajaxCall("RemoveFavorite", "item_id="+ $(".item_id").val() );
+	} else {
+	   showPage('login.html','none');
+	}
+};
+
+sheetItemFavoritesList = function(id,item_id,cat_id){
+	
+   ons.openActionSheet({
+    title:  t('What do you want to do?') ,
+    cancelable: true,
+    buttons: [      
+      {
+        label: t('View Item') ,        
+      },
+      {
+        label: t('Remove'),        
+      },
+      {
+      	 label: t("Close"),
+		 icon: 'md-close'
+      }
+    ]
+  }).then(function (index) { 
+  	   switch(index){
+  	   	  case 0:  	   	  
+  	   	     itemDetails(item_id, cat_id);
+  	   	  break;
+  	   	  
+  	   	  case 1:  	   	    
+  	   	   ons.platform.select('ios');	
+  	  	   ons.notification.confirm( t("Are you sure?") ,{
+				title: dialog_title,
+				buttonLabels : [  t("Ok"), t("Cancel") ]
+			}).then(function(input) {
+				if (input==0){
+					ajaxCall("RemoveFavoriteByID", "id="+ id);
+				}
+			});
+  	   	  break;
+  	   }
+  });
+};
+
+resendVerificationCode = function(verification_type){
+	ajaxCall("resendVerificationCode", "verification_type="+verification_type + "&signup_token="+ $(".token").val() );	
+};
+
+isLocation = function(){
+	if(app_settings = AppSettings()){	
+		if(app_settings.search_mode=="location"){
+			return true;
+		}
+	}	
+	return false;
+};
+
+locationMode = function(){
+	if(app_settings = AppSettings()){
+		if( !empty(app_settings.location_mode) ) {
+			return parseInt(app_settings.location_mode);
+		}
+	}
+	return 1;
+};
+
+switchhAddressBook = function(){
+	if(isLocation()){
+		showPage('addressbook_location.html')
+	} else {
+		showPage('addressbook.html')
+	}
+};
+
+setStateListVal = function(state_id,state_raw,country_id,country_name){
+	popPage();
+	setTimeout(function(){ 
+		current_page_id = onsenNavigator.topPage.id;		
+		
+		old_state_id = $("#"+current_page_id+" .state_id").val();
+		if(old_state_id!=state_id){
+			clearLocationForm({
+				city:'city',
+				area:'area',
+			});
+		}
+		$("#"+current_page_id+" .state_id").val(state_id);
+	    $("#"+current_page_id+" .state_raw").val(state_raw);
+	    $("#"+current_page_id+" .country_id").val(country_id);
+	    $("#"+current_page_id+" .country_name").val(country_name);	    
+	    $("#"+current_page_id+" .state_name").val(state_raw);
+    }, 100);	
+};
+
+clearLocationForm = function(data){
+	dump("->clearLocationForm");
+	dump(data);
+	if (data.length<=0){
+		return;
+	}	
+	
+	current_page_id = onsenNavigator.topPage.id;		
+	
+	$.each( data, function( key, val ) {
+		switch(val){
+			case "city":
+			$("#"+current_page_id+" .city_id").val('');
+			$("#"+current_page_id+" .city_name_raw").val('');
+			$("#"+current_page_id+" .city_name").val('');
+			break;
+			
+			case "area":
+			$("#"+current_page_id+" .area_id").val('');
+			$("#"+current_page_id+" .area_name_raw").val('');
+			$("#"+current_page_id+" .area_name").val('');
+			break;
+			
+			case "state":
+			$("#"+current_page_id+" .state_id").val('');
+			$("#"+current_page_id+" .state_raw").val('');
+			$("#"+current_page_id+" .state_name").val('');
+			$("#"+current_page_id+" .country_id").val('');
+			$("#"+current_page_id+" .country_name").val('');
+			break;
+		}
+	});
+};
+
+showLocationCity = function(){
+	current_page_id = onsenNavigator.topPage.id;
+	state_id = $("#"+current_page_id + ' .state_id').val();
+	if(!empty(state_id)){
+		showPage("location_city.html",'none',{			
+			state_id : state_id
+		});
+	} else {
+		showToast( t("Select State") );	
+	}
+};
+
+
+
+setCityListVal = function(city_id,city_name_raw){
+	popPage();
+	setTimeout(function(){ 
+		current_page_id = onsenNavigator.topPage.id;		
+		
+		old_city_id = $("#"+current_page_id+" .city_id").val();		
+		if(old_city_id!=city_id){
+			clearLocationForm({				
+				area:'area'
+			});
+		}
+		
+		$("#"+current_page_id+" .city_id").val(city_id);
+	    $("#"+current_page_id+" .city_name_raw").val(city_name_raw);		       
+	    $("#"+current_page_id+" .city_name").val(city_name_raw);	
+    }, 100);	
+};
+
+showArea = function(){
+	current_page_id = onsenNavigator.topPage.id;
+	city_id = $("#"+current_page_id + ' .city_id').val();
+	if(!empty(city_id)){
+		showPage("location_area.html",'none',{			
+			city_id : city_id
+		});
+	} else {
+		showToast( t("Select City") );	
+	}
+};
+
+
+setAreaListVal = function(area_id,area_name_raw){
+	popPage();
+	setTimeout(function(){ 
+		current_page_id = onsenNavigator.topPage.id;		
+		$("#"+current_page_id+" .area_id").val(area_id);
+	    $("#"+current_page_id+" .area_name_raw").val(area_name_raw);		       
+	    $("#"+current_page_id+" .area_name").val(area_name_raw);	
+    }, 100);	
+};
+
+preventTyping = function(element){	
+	$( element ).keyup(function( event ) {
+		if ( event.which == 13 ) {
+	    event.preventDefault();
+	} else {
+		$(this).val('');
+	}
+	}); 
+};
+
+setValue = function(element, value){
+	$(element).val(value);
+};
+
+showAddressForm = function(){
+	if(isLocation()){
+		replacePage('address_form_location.html');
+	} else {
+		replacePage('address_form.html');
+	}
+};
+
+resendOrderSMS = function(){
+	params = ''; 
+    phone = getStorage("customer_number");   	    
+    if(!empty(phone)){
+    	params="customer_number="+ phone;
+    }
+    ajaxCall('SendOrderSMSCode',params);
+};
+
+carThemeSettings = function(){
+	if(settings = AppSettings()){
+	   if(settings.cart_settings.theme==1){
+	   	  $(".basket_toolbar").remove();
+	   } else {
+	   	  $(".basket_normal").remove();
+	   }
+	}
+};
+
+floatingCategory = function(is_load){
+	if(settings = AppSettings()){		
+		if(settings.cart_settings.floating_category==1){
+			if(is_load){
+				setTimeout(function(){
+			      ajaxCall2("getAllCategory",'');
+			    },100);	
+			}
+		} else {
+			$(".fab_floating_category").remove();
+		}
+	}
+};
+
+runHomeBanner = function(stop_interval){
+   interval = 4000;
+   if(settings = AppSettings()){
+   	  if(settings.homebanner_auto_scroll!=1){      	  	 
+   	  	 return;
+   	  }
+   	  interval = parseInt(settings.homebanner_interval)+0;   	  
+   }   
+   
+   if(interval<=0){
+   	  interval = 4000;
+   }
+        
+   if(stop_interval){
+	  dump("STOP=>runHomeBanner");
+	  clearInterval(home_banner_interval);	  
+   } else {
+   	  dump("RUN=>runHomeBanner");
+      home_banner_interval = setInterval(function(){HomeBannerAutoScroll()}, interval );
+   }
+};
+
+HomeBannerAutoScroll = function(){
+	
+	current_page = document.querySelector('ons-navigator').topPage.id;	
+	dump("HomeBannerAutoScroll=>"+ current_page);	
+	if(current_page!="page_home"){
+		runHomeBanner(true);
+		return ;
+	}
+	
+	var total_banner = 0;
+	var startup_banner_index = $(".home_banner_index").val();
+	startup_banner_index = parseInt(startup_banner_index)+0;
+	if(settings = AppSettings()){
+		total_banner=settings.singleapp_banner.length;
+		total_banner = parseInt(total_banner)-1;
+	}
+	dump("total_banner=>"+total_banner);
+	var scroll_banner = document.getElementById('k_carousel');
+		
+	if(startup_banner_index>=total_banner){
+	   scroll_banner.setActiveIndex(0);
+	   $(".home_banner_index").val(0);
+	} else {	
+	   scroll_banner.next();
+	}
+};
+
+enabledAsap = function(){
+	delivery_asap_enabled = getStorage("is_asap");	
+    if(delivery_asap_enabled==1){
+        document.querySelector('#delivery_asap').checked = true;
+        $(".delivery_time").val('');
+    	$(".delivery_time_label").html('');
+    }
+};
+
+function CreditCardFormat(value) {
+  var v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '')
+  var matches = v.match(/\d{4,16}/g);
+  var match = matches && matches[0] || ''
+  var parts = []
+  for (i=0, len=match.length; i<len; i+=4) {
+    parts.push(match.substring(i, i+4))
+  }
+  if (parts.length) {
+    return parts.join(' ')
+  } else {
+    return value
+  }
+}
+
+preCheckout = function(){
+	
+	transaction_type = $(".transaction_type").val();
+	
+	switch (transaction_type){
+		case "delivery":
+		  var street = $(".delivery_address").val();
+		  if(empty(street)){
+		  	 showAlert( t("Please enter delivery address") );
+		  	 return ;
+		  }
+		  
+		  var delivery_asap_val = false;
+		  var delivery_asap = document.getElementById('delivery_asap');		  		  
+		  if(!empty(delivery_asap)){
+		  	  delivery_asap_val = delivery_asap.checked;
+		  }
+		  		  
+		  required_delivery_time = $(".required_delivery_time").val();
+		  if(required_delivery_time==1 && delivery_asap_val == false){
+		  	  delivery_time_set = getStorage("delivery_time_set");		  
+			  if(empty(delivery_time_set)){
+			  	 showAlert( t("Delivery time is required") );
+			  	 return;
+			  }
+		  }
+		  
+		  /*CHECK MINIMUM ORDER TABLE*/
+		  min_delivery_order = parseFloat($(".min_delivery_order").val());		  
+		  //alert(min_delivery_order);
+		  if(min_delivery_order>0.0001){
+		  	 cart_sub_total = parseFloat($(".cart_sub_total").val());		  	 
+		  	// alert(cart_sub_total);
+		  	 if(min_delivery_order>cart_sub_total){
+		  	 	showAlert( t("Sorry but Minimum order is") +" "+ prettyPrice(min_delivery_order) );
+			  	return;
+		  	 }
+		  }
+		  
+		break;
+		
+		case "pickup":
+		  delivery_time_set = getStorage("delivery_time_set");		  
+		  if(empty(delivery_time_set)){
+		  	 showAlert( t("Pickup time is required") );
+		  	 return;
+		  }
+		break;
+		
+		case "dinein":
+		  delivery_time_set = getStorage("delivery_time_set");		  
+		  if(empty(delivery_time_set)){
+		  	 showAlert( t("Dine in time is required") );
+		  	 return;
+		  }
+		break;
+	}
+	
+	params = 'transaction_type='+ transaction_type;
+	
+	delivery_date_set = getStorage("delivery_date_set");
+	if(!empty(delivery_date_set)){
+	   params +='&delivery_date=' + delivery_date_set;
+	}
+	
+	delivery_time_set = getStorage("delivery_time_set");
+	if(!empty(delivery_time_set)){
+	   params +='&delivery_time=' + delivery_time_set;	
+	}
+	
+	ajaxCall('preCheckout', params );
+
 };

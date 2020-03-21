@@ -3,21 +3,23 @@
 <plist version="1.0">
 <dict>
 	<key>CLIENT_ID</key>
-	<string>38082047281-icr61e546ifpor8omo01hm616342dvv1.apps.googleusercontent.com</string>
+	<string>1043781162812-rb7vejdnf82ifm475geic8kvq175la64.apps.googleusercontent.com</string>
 	<key>REVERSED_CLIENT_ID</key>
-	<string>com.googleusercontent.apps.38082047281-icr61e546ifpor8omo01hm616342dvv1</string>
+	<string>com.googleusercontent.apps.1043781162812-rb7vejdnf82ifm475geic8kvq175la64</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>1043781162812-j9pqb1grakofm8b8chisj0fs7ikgclea.apps.googleusercontent.com</string>
 	<key>API_KEY</key>
-	<string>AIzaSyDSwvkFHv1anoPmXCdtR973sZfgyq2suWs</string>
+	<string>AIzaSyB0bOHAmd58eux73_4gd4_bAdq3qO_O9kc</string>
 	<key>GCM_SENDER_ID</key>
-	<string>38082047281</string>
+	<string>1043781162812</string>
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>gq.foodtech.singleapp</string>
+	<string>thedot.eateries.coffee</string>
 	<key>PROJECT_ID</key>
-	<string>merchantownapp</string>
+	<string>thedotcoffee</string>
 	<key>STORAGE_BUCKET</key>
-	<string>merchantownapp.appspot.com</string>
+	<string>thedotcoffee.appspot.com</string>
 	<key>IS_ADS_ENABLED</key>
 	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>
@@ -29,8 +31,8 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:38082047281:ios:e50a6a7f3a6cf5a5</string>
+	<string>1:1043781162812:ios:05127b510b3d2a48677039</string>
 	<key>DATABASE_URL</key>
-	<string>https://merchantownapp.firebaseio.com</string>
+	<string>https://thedotcoffee.firebaseio.com</string>
 </dict>
 </plist>
