@@ -15,6 +15,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "1043781162812-j9pqb1grakofm8b8chisj0fs7ikgclea.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "thedot.eateries.coffee",
+            "certificate_hash": "9c531cc5fdf3fbacae6078297da23ec6c8e73b3b"
+          }
+        },
+        {
           "client_id": "1043781162812-r8bmtshiu8jc9vsosha3b5o5ophmb4ik.apps.googleusercontent.com",
           "client_type": 3
         }
@@ -30,6 +38,13 @@
             {
               "client_id": "1043781162812-r8bmtshiu8jc9vsosha3b5o5ophmb4ik.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "1043781162812-rb7vejdnf82ifm475geic8kvq175la64.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "thedot.eateries.coffee"
+              }
             }
           ]
         }
