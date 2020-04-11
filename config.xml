@@ -42,7 +42,7 @@
 	<gap:plugin name="phonegap-plugin-push" source="npm" spec="2.1.2"  />	
 			
 	<!--WHEN COMPILING THE APP TO IOS USE cordova.plugins.diagnostic version 5.0.1 FOR ANDROID use 4.0.0-->
-	<!--<gap:plugin name="cordova.plugins.diagnostic" source="npm" spec="5.0.1" />-->
+	<gap:plugin name="cordova.plugins.diagnostic" source="npm" spec="5.0.1" />
 	<gap:plugin name="cordova.plugins.diagnostic" source="npm" spec="4.0.0" />		
 	
 	<gap:plugin name="cordova-plugin-buildinfo" source="npm" spec="2.0.1"  />	
@@ -56,12 +56,10 @@
 	</gap:plugin>
 			 
 	<!--ENABLED FACEBOOK ONLY IF YOU HAVE APP ID-->
-	<!--
     <gap:plugin name="cordova-plugin-facebook4" source="npm"  spec="5.0.0" >
-	  <variable name="APP_ID" value="" />
-	  <variable name="APP_NAME" value="The Dot Coffee" />
+	  <variable name="APP_ID" value="600546587542281" />
+	  <variable name="APP_NAME" value="TheDotCoffee" />
 	</gap:plugin>	
-	-->
 		
 	<plugin name="uk.co.workingedge.phonegap.plugin.launchnavigator" source="npm" spec="5.0.4" >
        <variable name="GOOGLE_API_KEY_FOR_ANDROID" value="" />
