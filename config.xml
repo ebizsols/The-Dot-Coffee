@@ -51,7 +51,7 @@
     <gap:plugin name="cordova-plugin-file-transfer" source="npm" spec="1.7.1" /> 	
 		
 	<gap:plugin name="cordova-plugin-googleplus" source="npm" spec="7.0.2"  >    
-	  <variable name="REVERSED_CLIENT_ID" value="googleusercontent.com.apps.154396879870-9ndphsghv62bd67cn0c00o3n8fledkir" />
+	  <variable name="REVERSED_CLIENT_ID" value="com.googleusercontent.apps.1043781162812-j9pqb1grakofm8b8chisj0fs7ikgclea" />
 	  <variable name="PLAY_SERVICES_VERSION" value="11.0.1" /> 
 	</gap:plugin>
 			 
@@ -62,7 +62,7 @@
 	</gap:plugin>	
 		
 	<plugin name="uk.co.workingedge.phonegap.plugin.launchnavigator" source="npm" spec="5.0.4" >
-       <variable name="GOOGLE_API_KEY_FOR_ANDROID" value="" />
+       <variable name="GOOGLE_API_KEY_FOR_ANDROID" value="AIzaSyAsZcyBWfo6mLB-gg4r_9c1n2_zwNtEV4E" />
     </plugin>
     
     <gap:plugin name="com-sarriaroman-photoviewer" source="npm"  /> 
