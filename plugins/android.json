@@ -1,0 +1,33 @@
+{
+  "prepare_queue": {
+    "installed": [],
+    "uninstalled": []
+  },
+  "config_munge": {
+    "files": {}
+  },
+  "installed_plugins": {
+    "cordova-plugin-whitelist": {
+      "PACKAGE_NAME": "thedot.eateries.coffee"
+    },
+    "cordova-plugin-splashscreen": {
+      "PACKAGE_NAME": "thedot.eateries.coffee"
+    },
+    "cordova-plugin-file-transfer": {
+      "ANDROIDX_WEBKIT_VERSION": "1.4.0",
+      "PACKAGE_NAME": "thedot.eateries.coffee"
+    },
+    "cordova-plugin-device": {
+      "PACKAGE_NAME": "thedot.eateries.coffee"
+    },
+    "cordova-plugin-statusbar": {
+      "PACKAGE_NAME": "thedot.eateries.coffee"
+    }
+  },
+  "dependent_plugins": {
+    "cordova-plugin-file": {
+      "ANDROIDX_WEBKIT_VERSION": "1.4.0",
+      "PACKAGE_NAME": "thedot.eateries.coffee"
+    }
+  }
+}
